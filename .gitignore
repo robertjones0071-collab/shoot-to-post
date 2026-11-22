@@ -1,0 +1,44 @@
+# Personal inputs and generated outputs
+*.cr3
+*.CR3
+*.raw
+*.RAW
+*.jpg
+*.JPG
+*.jpeg
+*.JPEG
+*.heic
+*.HEIC
+*.dng
+*.DNG
+*.sqlite*
+*.db
+*.db-*
+*.jsonl
+*.csv
+*.log
+/photos/
+/shoots/
+/data/
+/output/
+/reports/
+/cache/
+/models/
+/vendor/
+# Credentials and machine settings
+.env
+.env.*
+!.env.example
+config.local.*
+*.pem
+*.key
+*.pfx
+# Build and editor artifacts
+/target/
+**/target/
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
