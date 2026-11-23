@@ -67,7 +67,7 @@ Website hosting and the minimal private job/status service are now in scope. The
 
 ## Website and local-folder boundary
 
-Confirmed website: [wheresroberttoday.com](https://wheresroberttoday.com/). Add a Dashboard navigation entry to that existing site, with an owner-authenticated dashboard route (proposed `/dashboard`). Do not create a replacement photography site. Public inspection confirms Next.js assets behind Cloudflare, but does not establish the editable hosting project. The currently accessible GitHub repositories do not include an identifiable website source; hosting/editor access remains to be located. No live website change has been made.
+Confirmed website: [wheresroberttoday.com](https://wheresroberttoday.com/), managed in ChatGPT Sites. Add a Dashboard navigation entry to that existing site, with an owner-authenticated dashboard route (proposed `/dashboard`). Do not create a replacement photography site. The exact Sites project must be retrieved through the supported connection before editing. No live website change has been made.
 
 The public navigation can include Dashboard, but private collection data and processing controls require the owner to sign in. A public source repository does not make the live dashboard data public. Hiding a tab alone is not access control.
 
@@ -77,7 +77,7 @@ JPEGs, CR3 files, decoded review images, model inference, the full manifest and 
 
 Remote photo previews and full archive access are unresolved. Under the current no-photo-upload choice, a summary can be viewed remotely, but a cloud page cannot render local images on another device without an authorized transfer path. Do not silently upload previews, expose the drive, or replace functioning local photo previews. Decide the preview connection as part of website integration before claiming end-to-end preview acceptance.
 
-The current website is publicly reachable and shows Next.js assets; that observation does not identify its source repository, deployment account or backend. Confirm those before editing or deploying it. The local portfolio export is not established as the live website source.
+Robert confirmed the existing website is managed in **ChatGPT Sites**. Reuse that exact Sites project, domain, current public audience and source repository; do not create a replacement Site or change the portfolio to private. Preserve the Site's existing authentication integration. Protect the Dashboard and every owner operation server-side using supported Sites identity plus explicit owner authorization. Being signed in alone is not proof of ownership. Use narrowly scoped worker pairing for public service endpoints; do not put service credentials into the browser. Use Sites-supported structured storage for minimal job/status records when needed, preserving existing bindings. Photo decoding, models and review stay on Windows. Inspect the actual project before selecting integration files. The local portfolio export is not established as the live website source.
 
 ## Build order and evidence
 
