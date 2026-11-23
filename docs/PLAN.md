@@ -67,6 +67,8 @@ Website hosting and the minimal private job/status service are now in scope. The
 
 ## Website and local-folder boundary
 
+Confirmed website: [wheresroberttoday.com](https://wheresroberttoday.com/). Add a Dashboard navigation entry to that existing site, with an owner-authenticated dashboard route (proposed `/dashboard`). Do not create a replacement photography site. Public inspection confirms Next.js assets behind Cloudflare, but does not establish the editable hosting project. The currently accessible GitHub repositories do not include an identifiable website source; hosting/editor access remains to be located. No live website change has been made.
+
 The public navigation can include Dashboard, but private collection data and processing controls require the owner to sign in. A public source repository does not make the live dashboard data public. Hiding a tab alone is not access control.
 
 The cloud service accepts authenticated job requests and stores minimal status/summary data. The worker fetches assigned commands through outbound HTTPS and validates the paired owner, allowed job operation and locally approved folder before acting. Cloud requests use worker-issued folder identifiers rather than arbitrary Windows paths or shell commands. Do not put worker credentials into public frontend code or Git.
