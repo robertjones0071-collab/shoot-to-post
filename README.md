@@ -1,10 +1,10 @@
 # Shoot to Post
 
-A planned Windows application for one-button aviation photo review.
+A planned website dashboard with a local Windows Rust worker for one-button aviation photo review.
 
-**Select a shoot → Cull Through Review → Receive a notification → Review the results.**
+**Open the website Dashboard → Select a shoot on the connected PC → Cull Through Review → Receive a notification and summary.**
 
-Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluation using the existing rubric, evidence-backed identification, safe naming, verified output copies and a shoot summary. Original input files remain unchanged.
+Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluation using the existing rubric, evidence-backed identification, safe naming, verified output copies and a shoot summary. Original input files remain unchanged in the existing Windows folders. Photo processing runs locally; the website provides authenticated controls and job summaries.
 
 ## Current status
 
@@ -14,7 +14,9 @@ Read the [implementation plan](docs/PLAN.md) for scope, folder routing, architec
 
 ## Intended approach
 
-- Rust job engine and a Tauri Windows interface.
+- Dashboard tab on the existing photography website.
+- Installed Rust worker on Windows, paired to the owner and restricted to approved folders.
+- Authenticated outbound communication for job requests and status; no publicly exposed local drive.
 - Reuse working image-analysis helpers where appropriate.
 - Validate a free local visual reviewer before committing to a large application build.
 - Preserve scoring evidence, model/rubric versions and original files.
@@ -22,7 +24,7 @@ Read the [implementation plan](docs/PLAN.md) for scope, folder routing, architec
 
 ## Scope
 
-Windows, JPEG and Canon CR3. No mobile app, cloud service, publishing integration or Lightroom replacement is included in version 1.
+Website interface, local Windows processing, JPEG and Canon CR3. Owner-only access and minimal job/status synchronization are included. No native mobile app, photo-library cloud sync, hosted AI, publishing integration or Lightroom replacement is included in version 1. Remote photo previews require a separate connection decision; summaries do not require uploading photos.
 
 ## Repository contents
 

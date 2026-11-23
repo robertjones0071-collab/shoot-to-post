@@ -1,22 +1,22 @@
-# Shoot to Post — Windows application plan
+# Shoot to Post — Website dashboard and Windows worker plan
 
-Status: proposed for Robert's review. Windows, JPEG plus Canon CR3 input, and the public `shoot-to-post` GitHub repository are confirmed. Application implementation has not started.
+Status: proposed for Robert's review. The website Dashboard tab, local Windows folders, JPEG plus Canon CR3 input, and public `shoot-to-post` GitHub repository are confirmed. Application implementation has not started.
 
 ## The product
 
-Select all photos from one shoot, click **Cull Through Review**, and receive a Windows notification when the results are ready. Opening the result shows the shoot summary and the reviewed photos. The application performs the existing review workflow; it does not introduce a different photography workflow.
+Open the **Dashboard** tab on the existing photography website, choose a shoot from the connected Windows PC, click **Cull Through Review**, and receive a completion notification with a summary. Photos stay in the existing Windows folders. A local Rust worker performs the existing review workflow; the website provides its interface.
 
-Windows is the agreed first platform. GitHub is now part of the project, replacing the earlier local-only deferral. Robert confirmed repository name `shoot-to-post` and public visibility. Working application name: **Shoot to Post**.
+The website is the agreed main interface; Windows remains the processing platform. A separate desktop dashboard window is not required. GitHub is now part of the project, replacing the earlier local-only deferral. Robert confirmed repository name `shoot-to-post` and public visibility. Working application name: **Shoot to Post**.
 
 ## Exactly what version 1 does
 
-1. **Select a shoot.** Choose a folder containing JPEGs, Canon CR3 RAW files, or both. Show the number of supported images, unreadable files, and unsupported files before starting. Both JPEG and CR3 are required in version 1. Decode CR3 into a full-resolution review rendering with recorded decoder/settings; an embedded JPEG preview alone is not proof of native-detail RAW review. Do not modify a RAW file or mislabel its rendered appearance as an assessment of unprocessed sensor data. Preserve separate provenance for RAW/JPEG inputs; any proposed pairing must not silently skip a supplied file.
+1. **Select a shoot.** Pair the Windows worker once, grant it access to chosen existing folders, then select an available shoot through the website Dashboard. Folder browsing is provided by the local worker, not arbitrary cloud access to the drive. Choose a shoot containing JPEGs, Canon CR3 RAW files, or both. Show the number of supported images, unreadable files, and unsupported files before starting. Both JPEG and CR3 are required in version 1. Decode CR3 into a full-resolution review rendering with recorded decoder/settings; an embedded JPEG preview alone is not proof of native-detail RAW review. Do not modify a RAW file or mislabel its rendered appearance as an assessment of unprocessed sensor data. Preserve separate provenance for RAW/JPEG inputs; any proposed pairing must not silently skip a supplied file.
 2. **Start one job.** One button starts import, review, identification, scoring, naming, output organization, and summary generation. Initial setup selects the output location; it does not recur as a per-photo approval step.
 3. **Review every input.** Keep input ordering deterministic. Compare similar frames to help identify the strongest candidates, but score each independently. Similarity must not invent score separation or automatically delete duplicates. The dashboard's existing above-80 indexing filter must not skip photos in a newly submitted shoot.
 4. **Apply the existing evaluation rules.** Examine the full frame and native-detail regions; classify motion, aircraft completeness, visible zones, technical defects, category scores, gates, and uncertainty. Return Unrated when evidence is insufficient. Keep the rubric version, model version, source checksum, evidence, and assessment together.
 5. **Identify and name.** Determine airline, aircraft type, and registration where supported. Use `Unknown` rather than inventing missing details. Preserve raw OCR suggestions separately from accepted identification. Use the agreed `Airline_Type_Registration_Score` naming convention, with safe duplicate suffixes.
 6. **Organize verified output copies.** Use the confirmed routing below. Preserve original input files, their names, and their bytes. Stage and verify each output before publishing it; never silently overwrite a file. Keep a durable operation record.
-7. **Notify and summarize.** Send a Windows notification only after finalizing the job report. Show total inputs, verified output copies, destination counts, unresolved identification, Unrated files, and failures. The notification opens the shoot results when supported by the installed application.
+7. **Notify and summarize.** Finalize the local report, deliver a Windows notification and update the website summary. Show total inputs, verified output copies, destination counts, unresolved identification, Unrated files, and failures. Notification activation opens the authenticated Dashboard results. Do not promise phone/browser push in version 1 without a separate decision.
 
 ## Confirmed rules to preserve
 
@@ -37,7 +37,7 @@ Technical evaluation uses Robert's existing rubric, currently version 14: Detail
 
 Robert still owns backup verification, final Lightroom edits, folder 7 staging, and publishing. Starting the app or opening the archive does not automatically start a review job.
 
-## Interface: three job states, existing archive retained
+## Interface: Dashboard tab with three job states, existing archive retained
 
 - **Ready:** select the shoot, see input count and output location, click Cull Through Review.
 - **Running:** see the current stage, completed/total files, and any errors; cancel safely. Persist work so interruption does not require starting again.
@@ -49,24 +49,39 @@ Reuse the accepted dashboard's colors, typography, light/dark modes and archive 
 
 | Piece | Plan |
 | --- | --- |
-| Windows desktop interface | Tauri shell, reusing the existing web interface where it fits |
+| Website interface | Dashboard tab on the existing photography website; reuse the accepted archive interface and palette |
+| Windows connection | Small installed Rust worker, paired to the owner, with access limited to selected existing folders |
 | Application engine | Rust: job orchestration, persistent state, validated result handling, file operations and summary |
 | Job storage | SQLite; new shoot jobs and assessments remain distinguishable from existing archive records |
 | Existing helpers | Reuse verified EXIF, image decoding, technical measurement, OCR and similarity workers initially; do not rewrite them merely to claim everything is Rust |
 | Automated visual reviewer | Evaluate a free local model against real reviewed examples; model and hardware feasibility are unresolved |
-| Completion notification | Native Windows notification from the installed application, backed by a durable in-app result |
+| Completion notification | Native Windows notification from the local worker, backed by a durable local report and website summary |
+| Website access | Owner authentication and authorization for every job, summary and connection endpoint; public site visitors cannot control the PC |
+| Worker communication | Authenticated outbound HTTPS requests to the service; no exposed Windows drive or public inbound worker port |
 
 Rust controls the workflow. The visual model supplies observations; deterministic validation enforces score arithmetic, gates, schema and routing. A model's plausible-looking response is not proof of a correct review.
 
 The existing Codex skill is a rubric and operating procedure, not a bundled model or an autonomous background service. The old PowerShell batch mover requires a supplied review plan and has obsolete routing/move behavior; it must not be executed unchanged inside the new application. Current OpenCV workers explicitly produce measurements rather than scores. Current OCR analyzes selected regions; unattended review must supply and validate those regions.
 
-No hosted AI dependency, paid service, or photo upload is approved. If a free local model cannot meet the agreed review quality and hardware needs, stop at that finding and discuss the tradeoff before changing the product or adding a provider.
+Website hosting and the minimal private job/status service are now in scope. Their platform, costs, storage and authentication must fit the existing website and free-options preference before implementation. No hosted AI dependency, paid processing service, or photo upload is approved. If a free local model cannot meet the agreed review quality and hardware needs, stop at that finding and discuss the tradeoff before changing the product or adding a provider.
+
+## Website and local-folder boundary
+
+The public navigation can include Dashboard, but private collection data and processing controls require the owner to sign in. A public source repository does not make the live dashboard data public. Hiding a tab alone is not access control.
+
+The cloud service accepts authenticated job requests and stores minimal status/summary data. The worker fetches assigned commands through outbound HTTPS and validates the paired owner, allowed job operation and locally approved folder before acting. Cloud requests use worker-issued folder identifiers rather than arbitrary Windows paths or shell commands. Do not put worker credentials into public frontend code or Git.
+
+JPEGs, CR3 files, decoded review images, model inference, the full manifest and file organization stay on the Windows PC. The PC must be awake, the worker running and the drive connected. Offline machines are displayed as offline; a pending command is not labeled running or complete. Windows notifications require the local installation to be functioning; the website retains the result summary if notification delivery fails.
+
+Remote photo previews and full archive access are unresolved. Under the current no-photo-upload choice, a summary can be viewed remotely, but a cloud page cannot render local images on another device without an authorized transfer path. Do not silently upload previews, expose the drive, or replace functioning local photo previews. Decide the preview connection as part of website integration before claiming end-to-end preview acceptance.
+
+The current website is publicly reachable and shows Next.js assets; that observation does not identify its source repository, deployment account or backend. Confirm those before editing or deploying it. The local portfolio export is not established as the live website source.
 
 ## Build order and evidence
 
 ### 1. Agree on this plan
 
-Windows, JPEG plus CR3, public visibility and repository name are confirmed. Robert still reviews the complete implementation plan before application coding. Record any scope changes here first.
+The website Dashboard, Windows worker, existing folders, JPEG plus CR3, public visibility and repository name are confirmed. Robert still reviews the complete implementation plan before application coding. Record any scope changes here first.
 
 ### 2. Establish review quality before a large application build
 
@@ -78,13 +93,13 @@ This is a release gate for unattended review, not an optional accuracy report to
 
 ### 3. Build the first end-to-end job
 
-Implement a persisted Rust job and connect the selected validated reviewer and existing helpers. Run one small shoot through input selection, every-photo review, score validation, verified output copies, final manifest, results and Windows notification. Compare it with the agreed reference process. Use an isolated output folder; leave the live archive intact.
+Implement owner authentication, worker pairing and a persisted Rust job connected to the selected validated reviewer and existing helpers. Run one small shoot from the website through input selection, every-photo review, score validation, verified output copies, final manifest, website results and Windows notification. Compare it with the agreed reference process. Use an isolated output folder; leave the live archive intact.
 
 ### 4. Prove recovery and package Windows
 
 Test cancellation, app restart, partial output recovery, duplicate input, same-name different-content files, unavailable sources/output disks, invalid model responses and worker failure. Resume must not overwrite unrelated files, double-count results, or report unverified work as complete. Keep a per-photo ledger so failed items can be retried separately. A job with errors reports those errors honestly.
 
-Build and test the actual Windows installer. Verify the installed app's notification, notification activation, local runtime/model availability, and complete review on a realistic shoot. Opening the app must not depend on a Codex runtime path or an active Codex chat. Verify the existing dashboard/history still works.
+Build and test the actual Windows worker installer. Verify pairing, notification, notification activation, local runtime/model availability, and complete review on a realistic shoot. The website and worker must not depend on a Codex runtime path or an active Codex chat. Verify the existing dashboard/history still works. Test blocked anonymous/other-device commands, expired/revoked pairing, network loss, PC asleep/offline, and delayed/replayed commands. Local processing can finish while disconnected; synchronize the summary on reconnect without starting the job again.
 
 ### 5. Accept the finished workflow
 
@@ -102,7 +117,7 @@ Repository creation and a documentation-only first push are authorized by Robert
 
 ## Excluded from this scope
 
-iOS, Android, cloud sync, accounts, payments, Instagram publishing, Lightroom replacement, a new dashboard design, automatic source deletion, unrelated archive rescoring, and a blanket rewrite of every existing helper into Rust.
+iOS/Android native apps, photo-library cloud sync, public user registration or multi-user accounts, payments, Instagram publishing, Lightroom replacement, a new dashboard design, automatic source deletion, unrelated archive rescoring, and a blanket rewrite of every existing helper into Rust. Owner-only authentication and minimal job/status synchronization are included because the dashboard is website-hosted.
 
 ## Planning references
 
