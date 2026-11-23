@@ -1,0 +1,45 @@
+{
+  "ordinal": 0,
+  "sourceSha256": "REPLACE_WITH_PHOTO_SHA256_FROM_REPORT",
+  "review": {
+    "rubricVersion": 14,
+    "reviewer": "REPLACE: named reviewer who inspected this photo",
+    "reviewedAt": "REPLACE: ISO timestamp",
+    "viewingEvidence": "REPLACE: file resolution, zoom and visible regions actually inspected",
+    "categories": {
+      "detail": 27,
+      "focusMotion": 23,
+      "exposure": 14,
+      "noise": 9,
+      "color": 9,
+      "processing": 9
+    },
+    "categoryEvidence": {
+      "detail": "REPLACE: visible evidence for this category",
+      "focusMotion": "REPLACE: visible evidence for this category",
+      "exposure": "REPLACE: visible evidence for this category",
+      "noise": "REPLACE: visible evidence for this category",
+      "color": "REPLACE: visible evidence for this category",
+      "processing": "REPLACE: visible evidence for this category"
+    },
+    "zones": {
+      "cockpit": "strong",
+      "nose": "strong",
+      "midbody": "strong",
+      "mechanical": "strong",
+      "tail": "strong"
+    },
+    "motionMode": "FRZ",
+    "motionConfidence": "medium",
+    "completeness": "whole",
+    "cockpitIsTarget": true,
+    "closeInspection": false,
+    "confidence": "medium",
+    "uncertainty": 3,
+    "strongestAttribute": "REPLACE: observed strongest attribute",
+    "primaryFlaw": "REPLACE: observed primary limitation",
+    "likelyCause": "REPLACE: supported cause, or uncertain",
+    "defects": []
+  },
+  "identification": null
+}

@@ -27,6 +27,9 @@ async function configure(){
     defaultOutput:root,folderNames};
    await mkdir(path.dirname(settingsFile),{recursive:true});await writeFile(settingsFile,JSON.stringify(settings,null,2),{flag:'wx'});
   }
+  const base=path.join(project,'../aviation-dashboard');
+  const tools={analysisPython:path.join(base,'vendor/analysis-env/Scripts/python.exe'),ocrPython:path.join(base,'vendor/ocr-env/Scripts/python.exe'),technicalScript:path.join(base,'analysis/technical_worker.py'),registrationScript:path.join(base,'analysis/registration_worker.py'),collector:path.join(project,'analysis/collect_evidence.py'),archiveDatabase:path.join(base,'data/archive.sqlite')};
+  if(JSON.stringify(settings.tools)!==JSON.stringify(tools)){settings.tools=tools;await writeFile(settingsFile,JSON.stringify(settings,null,2));}
   return settings;
  })().catch(error=>{setupPromise=null;throw error;});return setupPromise;
 }
@@ -36,7 +39,7 @@ async function callWorker(route,options={},timeout=5000){
  const value=await response.json();if(!response.ok)throw Object.assign(Error(value.error||'Shoot worker request failed'),{status:response.status});return value;
 }
 async function ready(){
- await configure();try{return await callWorker('/health');}catch{}
+ await configure();try{const health=await callWorker('/health');if(health.engine!=='rust-aviation-rubric-14')throw Error('Restart the local dashboard worker to load rubric 14');if(!health.processingReady)throw Error('Existing local analysis tools are unavailable');return health;}catch(error){if(error.message.startsWith('Restart ')||error.message==='Existing local analysis tools are unavailable')throw error;}
  if(!child||child.exitCode!==null||!child.pid){
   const candidates=['target/x86_64-pc-windows-gnu/release/shoot-to-post-worker.exe','target/release/shoot-to-post-worker.exe'].map(p=>path.join(project,p));let executable;
   for(const value of candidates){try{await access(value);executable=value;break;}catch{}}
@@ -58,8 +61,8 @@ export async function handleShootRequest(req,res,url){
   if(url.pathname==='/shoots/config'&&req.method==='GET'){send(res,200,{...await callWorker('/settings'),clientToken});return true;}
   if(url.pathname==='/shoots/health'&&req.method==='GET'){send(res,200,await callWorker('/health'));return true;}
   const route=url.pathname.slice('/shoots'.length);
-  if(!/^\/(?:jobs(?:\/shoot-[a-zA-Z0-9-]+(?:\/(?:cancel|resume))?)?|pick-folder)$/.test(route))throw Object.assign(Error('Unknown shoot operation'),{status:404});
-  let body;if(req.method==='POST'){body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>16384)throw Object.assign(Error('Request too large'),{status:400});}}
+  if(!/^\/(?:jobs(?:\/shoot-[a-zA-Z0-9-]+(?:\/(?:cancel|resume|review))?)?|pick-folder)$/.test(route))throw Object.assign(Error('Unknown shoot operation'),{status:404});
+  let body;if(req.method==='POST'){body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>65536)throw Object.assign(Error('Request too large'),{status:400});}}
   send(res,200,await callWorker(route,{method:req.method,body,headers:body?{'Content-Type':'application/json'}:{}},route==='/pick-folder'?180000:30000));
  }catch(error){send(res,error.status||503,{error:error.message});}return true;
 }

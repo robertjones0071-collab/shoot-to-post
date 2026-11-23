@@ -2,7 +2,12 @@ use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use shoot_to_post_scorer::{file_hash, Scorer};
+use shoot_to_post_scorer::{
+    evidence::{self, Tools},
+    file_hash,
+    review::{self, VisualReview},
+    Scorer,
+};
 use std::{
     collections::BTreeMap,
     fs,
@@ -30,6 +35,8 @@ struct Settings {
     raw_decoder: PathBuf,
     default_output: PathBuf,
     folder_names: BTreeMap<String, String>,
+    #[serde(default)]
+    tools: Option<Tools>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +49,8 @@ struct Job {
     created_at: u128,
     total: usize,
     unsupported: usize,
+    #[serde(default)]
+    unsupported_paths: Vec<PathBuf>,
     error: Option<String>,
     notification: Option<String>,
 }
@@ -58,6 +67,26 @@ struct Item {
     assessment: Option<Value>,
     error: Option<String>,
     copied: bool,
+    #[serde(default)]
+    evidence: Option<Value>,
+    #[serde(default)]
+    visual_review: Option<VisualReview>,
+    #[serde(default)]
+    identification_review: Option<IdentificationReview>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct IdentificationReview {
+    labels: [String; 3],
+    evidence: [String; 3],
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReviewSubmission {
+    ordinal: usize,
+    source_sha256: String,
+    review: VisualReview,
+    identification: Option<IdentificationReview>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -120,7 +149,11 @@ fn is_link(meta: &fs::Metadata) -> bool {
     }
     false
 }
-fn enumerate(folder: &Path, files: &mut Vec<PathBuf>, unsupported: &mut usize) -> Result<()> {
+fn enumerate(
+    folder: &Path,
+    files: &mut Vec<PathBuf>,
+    unsupported: &mut Vec<PathBuf>,
+) -> Result<()> {
     for entry in fs::read_dir(folder)? {
         let entry = entry?;
         let path = entry.path();
@@ -139,7 +172,7 @@ fn enumerate(folder: &Path, files: &mut Vec<PathBuf>, unsupported: &mut usize) -
             if ["jpg", "jpeg", "png", "cr3"].contains(&ext.as_str()) {
                 files.push(path);
             } else {
-                *unsupported += 1;
+                unsupported.push(path);
             }
         }
         if files.len() > 100_000 {
@@ -171,6 +204,7 @@ fn summary(db: &Connection, job: &Job, detail: bool) -> Result<Value> {
     let rows = items(db, &job.id)?;
     let done = rows.iter().filter(|r| r.state == "done").count();
     let failed = rows.iter().filter(|r| r.state == "failed").count();
+    let needs_review = rows.iter().filter(|r| r.state == "needs_review").count();
     let attention = rows
         .iter()
         .filter(|r| {
@@ -191,8 +225,22 @@ fn summary(db: &Connection, job: &Job, detail: bool) -> Result<Value> {
             }
         }
     }
-    let mut value = json!({"job":job,"completed":done,"failed":failed,"processed":done+failed,"needsIdentification":attention,"destinations":folders,"scoreBasis":"Provisional raw HyperIQA; score calibration deferred"});
+    let mut value = json!({"job":job,"completed":done,"failed":failed,"processed":done+failed+needs_review,"needsReview":needs_review,"needsIdentification":attention,"destinations":folders,"scoreBasis":"Evidence-backed rubric 14; HyperIQA diagnostic only; calibration deferred"});
     if detail {
+        let mut manifest:Vec<Value>=rows.iter().map(|r|{
+            let labels=r.labels.clone().unwrap_or(["Unknown".into(),"Unknown".into(),"Unknown".into()]);
+            let rubric=r.assessment.as_ref().map(|a|a["rubric"].clone()).unwrap_or(Value::Null);
+            let source_bytes=fs::metadata(&r.source).ok().map(|m|m.len());
+            let destination_bytes=r.output.as_ref().and_then(|p|fs::metadata(p).ok()).map(|m|m.len());
+            json!({"originalFilename":r.source.file_name().map(|s|s.to_string_lossy()),"sourcePath":public_path(&r.source),"sourceSha256":r.source_sha,"sourceSizeBytes":source_bytes,
+            "newFilename":r.output.as_ref().and_then(|p|p.file_name()).map(|s|s.to_string_lossy()),"destinationPath":r.output.as_ref().map(|p|public_path(p)),"destinationSizeBytes":destination_bytes,
+            "score":r.score,"scoreBand":rubric["scoreBand"],"motionMode":rubric["motionMode"],"confidence":rubric["confidence"],"airline":labels[0],"aircraft":labels[1],"registration":labels[2],"airport":"Unknown",
+            "captureDate":r.evidence.as_ref().map(|e|e["technical"]["metadata"]["captureDate"].clone()),"primaryFlaw":rubric["primaryFlaw"],"ratingStatus":if r.score.is_some(){"rated"}else{"unrated"},
+            "fileOperationStatus":match r.state.as_str(){"done"=>"renamed_copy_created","failed"=>"failed","needs_review"=>"unrated",_=>"proposed_only"},"error":r.error,"rubricVersion":14})
+        }).collect();
+        manifest.extend(job.unsupported_paths.iter().map(|p|json!({"sourcePath":public_path(p),"originalFilename":p.file_name().map(|s|s.to_string_lossy()),"score":null,"fileOperationStatus":"unsupported_file","ratingStatus":"unsupported"})));
+        value["manifest"] = json!(manifest);
+        value["reportVersion"] = json!(2);
         value["items"] = serde_json::to_value(rows)?;
     }
     Ok(value)
@@ -210,7 +258,7 @@ fn create_job(app: &App, request: NewJob) -> Result<Value> {
         bail!("Output must be outside the selected shoot folder");
     }
     let mut paths = Vec::new();
-    let mut unsupported = 0;
+    let mut unsupported = Vec::new();
     enumerate(&source, &mut paths, &mut unsupported)?;
     paths.sort();
     if paths.is_empty() {
@@ -250,7 +298,8 @@ fn create_job(app: &App, request: NewJob) -> Result<Value> {
         state: "queued".into(),
         created_at: now(),
         total: paths.len(),
-        unsupported,
+        unsupported: unsupported.len(),
+        unsupported_paths: unsupported,
         error: None,
         notification: None,
     };
@@ -272,6 +321,9 @@ fn create_job(app: &App, request: NewJob) -> Result<Value> {
                     assessment: None,
                     error: None,
                     copied: false,
+                    evidence: None,
+                    visual_review: None,
+                    identification_review: None,
                 },
             )?;
         }
@@ -300,9 +352,9 @@ fn route(score: u8, kind: &str, registration: &str) -> u8 {
 fn slug(value: &str) -> String {
     let result: String = value
         .chars()
-        .take(64)
+        .take(45)
         .map(|c| {
-            if c.is_alphanumeric() || c == '-' {
+            if c.is_ascii_alphanumeric() || c == '-' {
                 c
             } else {
                 '-'
@@ -352,10 +404,18 @@ fn verified_copy(source: &Path, destination: &Path, expected: &str) -> Result<bo
     }
     Ok(true)
 }
-fn process_item(app: &App, job: &Job, item: &mut Item, scorer: &mut Scorer) -> Result<()> {
+fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Scorer>) -> Result<()> {
     let source = approved(&item.source, &app.settings)?;
     // A recorded output plan is a recovery checkpoint, not permission to replace any file.
     if let (Some(destination), Some(expected)) = (&item.output, &item.source_sha) {
+        if item
+            .assessment
+            .as_ref()
+            .and_then(|a| a["rubric"]["status"].as_str())
+            != Some("rated")
+        {
+            bail!("Legacy provisional-score output plan requires a new rubric review");
+        }
         let root = approved(&job.output, &app.settings)?;
         let parent = approved(
             destination
@@ -373,15 +433,83 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: &mut Scorer) -> R
         item.state = "done".into();
         return Ok(());
     }
-    let result = scorer.score(&source, Some(&app.settings.raw_decoder), None)?;
-    let raw = result["rawQualityScore"]
-        .as_f64()
-        .context("Missing quality score")?;
-    if !raw.is_finite() || !(0.0..=100.0).contains(&raw) {
-        bail!("Model returned a score outside 0–100; no automatic routing applied");
+    let sha = file_hash(&source)?;
+    if item.source_sha.as_ref().is_some_and(|old| old != &sha) {
+        bail!("Source changed since evidence/review was recorded");
     }
-    let names = labels(&source);
-    let number = route(raw.round() as u8, &job.kind, &names[2]);
+    item.source_sha = Some(sha.clone());
+    if item.evidence.is_none() {
+        let tools = app
+            .settings
+            .tools
+            .as_ref()
+            .context("Existing analysis tools are not configured")?;
+        item.evidence = Some(evidence::collect(
+            tools,
+            &source,
+            &app.settings.raw_decoder,
+        )?);
+    }
+    let mut names = labels(&source);
+    let mut provenance = vec!["existing filename claim"; 3];
+    if let Some(evidence) = &item.evidence {
+        for i in 0..3 {
+            if evidence["archiveIdentity"]["conflicts"][i].as_bool() == Some(true) {
+                names[i] = "Unknown".into();
+                provenance[i] = "conflicting exact-byte archive metadata";
+            } else if let Some(label) = evidence["archiveIdentity"]["labels"][i]
+                .as_str()
+                .filter(|s| *s != "Unknown")
+            {
+                if names[i] != "Unknown" && !names[i].eq_ignore_ascii_case(&slug(label)) {
+                    names[i] = "Unknown".into();
+                    provenance[i] = "filename/archive conflict";
+                } else {
+                    names[i] = slug(label);
+                    provenance[i] = "exact SHA-256 archive metadata";
+                }
+            }
+        }
+    }
+    if let Some(identification) = &item.identification_review {
+        for i in 0..3 {
+            names[i] = slug(&identification.labels[i]);
+            provenance[i] = "reviewer-confirmed identification";
+        }
+    }
+    item.labels = Some(names.clone());
+    // General quality prediction is retained as a diagnostic, never as a rubric grade.
+    let diagnostic = if let Some(previous) = item
+        .assessment
+        .as_ref()
+        .and_then(|a| a.get("modelDiagnostic"))
+    {
+        previous.clone()
+    } else if let Some(scorer) = scorer {
+        match scorer.score(&source, Some(&app.settings.raw_decoder), None) {
+            Ok(v) => v,
+            Err(e) => json!({"error":format!("{e:#}")}),
+        }
+    } else {
+        json!({"error":"Optional HyperIQA model unavailable"})
+    };
+    let result = if let Some(review) = &item.visual_review {
+        review::evaluate(review, job.kind == "aviation")?
+    } else {
+        json!({"status":"needs_review","rubricVersion":14,"finalScore":null,"reason":"Native visual observations and six evidenced category scores are required; measurements and OCR cannot supply them"})
+    };
+    item.assessment = Some(
+        json!({"sourceSha256":sha,"rubric":result,"modelDiagnostic":diagnostic,"identification":{"labels":names,"basis":provenance,"review":item.identification_review,"registrationOcrAcceptedAutomatically":false}}),
+    );
+    let Some(final_score) = result["finalScore"].as_u64() else {
+        item.score = None;
+        item.state = "needs_review".into();
+        return Ok(());
+    };
+    if file_hash(&source)? != sha {
+        bail!("Source changed after assessment");
+    }
+    let number = route(final_score as u8, &job.kind, &names[2]);
     let folder_name = app
         .settings
         .folder_names
@@ -401,10 +529,7 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: &mut Scorer) -> R
         .to_lowercase();
     let base = format!(
         "{}_{}_{}_{}",
-        names[0],
-        names[1],
-        names[2],
-        raw.round() as u8
+        names[0], names[1], names[2], final_score as u8
     );
     let mut destination = folder.join(format!("{base}.{extension}"));
     let mut suffix = 2;
@@ -412,15 +537,7 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: &mut Scorer) -> R
         destination = folder.join(format!("{base}_{suffix}.{extension}"));
         suffix += 1;
     }
-    item.source_sha = Some(
-        result["sourceSha256"]
-            .as_str()
-            .context("Missing source checksum")?
-            .into(),
-    );
-    item.score = Some(raw);
-    item.labels = Some(names);
-    item.assessment = Some(result);
+    item.score = Some(final_score as f64);
     item.output = Some(destination.clone());
     save_item(&app.db.lock().unwrap(), &job.id, item)?; // Persist intent before copying/publishing.
     item.copied = verified_copy(&source, &destination, item.source_sha.as_ref().unwrap())?;
@@ -494,11 +611,11 @@ fn runner(app: Arc<App>) {
         let id = job.id.clone();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
             if scorer.is_none() {
-                scorer = Some(Scorer::new(
+                scorer = Scorer::new(
                     &app.settings.model,
                     &app.settings.model_sha256,
                     &app.settings.runtime,
-                )?);
+                ).ok();
             }
             let rows = items(&app.db.lock().unwrap(), &id)?;
             for mut item in rows {
@@ -507,13 +624,13 @@ fn runner(app: Arc<App>) {
                     save_job(&app.db.lock().unwrap(), &job)?;
                     return Ok(());
                 }
-                if item.state == "done" {
+                if item.state == "done" || (item.state=="needs_review" && item.visual_review.is_none()) {
                     continue;
                 }
                 item.state = "processing".into();
                 item.error = None;
                 save_item(&app.db.lock().unwrap(), &id, &item)?;
-                if let Err(error) = process_item(&app, &job, &mut item, scorer.as_mut().unwrap()) {
+                if let Err(error) = process_item(&app, &job, &mut item, scorer.as_mut()) {
                     item.state = "failed".into();
                     item.error = Some(format!("{error:#}"));
                 }
@@ -522,13 +639,15 @@ fn runner(app: Arc<App>) {
             let detail = summary(&app.db.lock().unwrap(), &job, false)?;
             job.state = if detail["failed"].as_u64().unwrap_or(0) > 0 {
                 "completed_with_errors"
+            } else if detail["needsReview"].as_u64().unwrap_or(0)>0 {
+                "awaiting_review"
             } else {
                 "completed"
             }
             .into();
             job.notification = Some("attempted".into());
             save_job(&app.db.lock().unwrap(), &job)?;
-            let message=format!("{} photos finished; {} output copies verified; {} errors; {} need identification. Open the local dashboard for results.",job.total,detail["completed"],detail["failed"],detail["needsIdentification"]);
+            let message=format!("{} photos finished; {} output copies verified; {} errors; {} need visual review; {} need identification. Open the local dashboard for results.",job.total,detail["completed"],detail["failed"],detail["needsReview"],detail["needsIdentification"]);
             job.notification = Some(match notify("Shoot to Post — shoot finished", &message) {
                 Ok(()) => "submitted to Windows".into(),
                 Err(e) => e.to_string(),
@@ -553,12 +672,12 @@ fn json_response(value: Value, status: u16) -> Response<std::io::Cursor<Vec<u8>>
         .with_header(Header::from_bytes("Cache-Control", "no-store").unwrap())
 }
 fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
-    let route = request.url().split('?').next().unwrap_or("");
+    let route = request.url().split('?').next().unwrap_or("").to_owned();
     let method = request.method().clone();
     let parts: Vec<_> = route.trim_matches('/').split('/').collect();
     if route == "/health" && method == Method::Get {
         return Ok(
-            json!({"ready":true,"engine":"rust-hyperiqa","scoreCalibration":"deferred","fullShootAcceptance":"deferred"}),
+            json!({"ready":true,"processingReady":app.settings.tools.as_ref().is_some_and(|t|[&t.analysis_python,&t.ocr_python,&t.technical_script,&t.registration_script,&t.collector,&t.archive_database,&app.settings.raw_decoder].iter().all(|p|p.is_file())),"engine":"rust-aviation-rubric-14","automaticVisualReviewer":false,"scoreCalibration":"deferred","fullShootAcceptance":"deferred"}),
         );
     }
     if route == "/settings" && method == Method::Get {
@@ -613,6 +732,50 @@ fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
         if method == Method::Get && parts.len() == 2 {
             return summary(&db, &job, true);
         }
+        if method == Method::Post && parts.len() == 3 && parts[2] == "review" {
+            if ["queued", "running", "cancel_requested"].contains(&job.state.as_str()) {
+                bail!("Wait for processing to pause before submitting a visual review");
+            }
+            let mut body = String::new();
+            request.as_reader().take(65_537).read_to_string(&mut body)?;
+            if body.len() > 65_536 {
+                bail!("Review request too large");
+            }
+            let submission: ReviewSubmission = serde_json::from_str(&body)?;
+            review::evaluate(&submission.review, job.kind == "aviation")?;
+            let mut rows = items(&db, id)?;
+            let item = rows
+                .iter_mut()
+                .find(|r| r.ordinal == submission.ordinal)
+                .context("Photo ordinal not found")?;
+            if item.state == "done" || item.output.is_some() {
+                bail!("Completed/planned output cannot be silently rescored");
+            }
+            if item.source_sha.as_deref() != Some(submission.source_sha256.as_str())
+                || file_hash(&approved(&item.source, &app.settings)?)? != submission.source_sha256
+            {
+                bail!("Review checksum does not match the photo evidence");
+            }
+            if let Some(identity) = &submission.identification {
+                for i in 0..3 {
+                    if identity.labels[i].len() > 64
+                        || identity.evidence[i].trim().is_empty()
+                        || identity.evidence[i].len() > 4000
+                    {
+                        bail!("Identification labels need explicit supporting evidence");
+                    }
+                }
+            }
+            item.visual_review = Some(submission.review);
+            item.identification_review = submission.identification;
+            item.state = "pending".into();
+            item.error = None;
+            save_item(&db, id, item)?;
+            // Explicit Resume applies accepted reviews; merely importing never copies a file.
+            job.notification = None;
+            save_job(&db, &job)?;
+            return summary(&db, &job, true);
+        }
         if method == Method::Post && parts.len() == 3 {
             if parts[2] == "cancel" && ["running", "queued"].contains(&job.state.as_str()) {
                 job.state = if job.state == "queued" {
@@ -622,7 +785,13 @@ fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
                 }
                 .into();
             } else if parts[2] == "resume"
-                && ["paused", "cancelled", "completed_with_errors"].contains(&job.state.as_str())
+                && [
+                    "paused",
+                    "cancelled",
+                    "completed_with_errors",
+                    "awaiting_review",
+                ]
+                .contains(&job.state.as_str())
             {
                 if db.query_row("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running','cancel_requested')",[],|r|r.get::<_,usize>(0))?>0 {bail!("Another shoot is active");}
                 job.state = "queued".into();
@@ -718,6 +887,66 @@ fn main() {
 mod tests {
     use super::*;
     #[test]
+    fn missing_visual_evidence_stays_unrated_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        let output = dir.path().join("out");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&output).unwrap();
+        let image = source.join("Example_A320_N123AB_99.jpg");
+        fs::write(&image, b"synthetic component bytes, never visually scored").unwrap();
+        let sha = file_hash(&image).unwrap();
+        let settings = Settings {
+            bind: "127.0.0.1:0".into(),
+            token: "synthetic-only-token-000000000000000".into(),
+            database: dir.path().join("jobs.sqlite"),
+            allowed_roots: vec![dir.path().into()],
+            model: "unused".into(),
+            model_sha256: "unused".into(),
+            runtime: "unused".into(),
+            raw_decoder: "unused".into(),
+            default_output: output.clone(),
+            folder_names: BTreeMap::new(),
+            tools: None,
+        };
+        let db = open_store(&settings.database).unwrap();
+        let app = App {
+            settings,
+            db: Mutex::new(db),
+            picker_busy: AtomicBool::new(false),
+        };
+        let created = create_job(
+            &app,
+            NewJob {
+                source,
+                output: output.clone(),
+                kind: "aviation".into(),
+                request_id: Some("needs-review-component".into()),
+            },
+        )
+        .unwrap();
+        let id = created["job"]["id"].as_str().unwrap();
+        let job = load_job(&app.db.lock().unwrap(), id).unwrap();
+        let mut item = items(&app.db.lock().unwrap(), id).unwrap().remove(0);
+        // Cached synthetic evidence avoids running decoders/model/helpers in this component test.
+        item.evidence = Some(json!({"sourceSha256":sha,"archiveIdentity":null,"errors":[]}));
+        process_item(&app, &job, &mut item, None).unwrap();
+        assert_eq!(item.state, "needs_review");
+        assert!(item.score.is_none());
+        assert!(item.output.is_none());
+        assert_eq!(file_hash(&image).unwrap(), sha);
+        assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
+        save_item(&app.db.lock().unwrap(), id, &item).unwrap();
+        let report = summary(&app.db.lock().unwrap(), &job, true).unwrap();
+        assert_eq!(report["needsReview"], 1);
+        assert_eq!(report["manifest"][0]["ratingStatus"], "unrated");
+        assert_eq!(report["manifest"][0]["fileOperationStatus"], "unrated");
+        assert_eq!(
+            report["items"][0]["assessment"]["rubric"]["finalScore"],
+            Value::Null
+        );
+    }
+    #[test]
     fn routing_boundaries_and_labels() {
         assert_eq!(route(92, "aviation", "Unknown"), 2);
         assert_eq!(route(91, "aviation", "Unknown"), 4);
@@ -774,6 +1003,7 @@ mod tests {
             raw_decoder: "unused".into(),
             default_output: output.clone(),
             folder_names: BTreeMap::new(),
+            tools: None,
         };
         let app = App {
             settings,

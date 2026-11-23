@@ -10,9 +10,13 @@ Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluat
 
 The existing local dashboard now connects to a native Rust job worker in its Processing tab. Select a shoot folder, choose its content type, and start. The worker supports JPEG and Canon CR3 inputs, persists progress in a separate SQLite database, provides cancellation and resume, and produces checksum-verified output copies without changing originals. Results and a downloadable JSON report appear in the dashboard; the completion handler submits a Windows notification linking back to Processing.
 
-HyperIQA supplies **provisional raw model scores**, not calibrated aviation rubric grades. Existing filename labels are reused; missing airline, aircraft or registration values remain Unknown. This version does not provide automatic aircraft identification or the complete technical rubric. Existing archive ratings and human decisions remain separate.
+The Rust worker now calls the existing OpenCV and RapidOCR helpers, reads EXIF from decoded inputs, and reuses exact-byte archive identity metadata through a read-only connection. OCR output stays unconfirmed; conflicting identity labels remain Unknown. Historical grades are never read for a new grade or overwritten.
 
-The Windows release builds and six component tests pass. A real CR3 decoder-only check produced a full-resolution TIFF without changing the original. Dashboard/API readiness is checked separately. **Score comparisons and full-shoot end-to-end acceptance are deferred at Robert's request.** Actual notification delivery and the complete batch lifecycle therefore remain unverified. No installer is provided.
+Rubric 14 category arithmetic, dependencies, motion rules, technical ceilings and the whole-aircraft 79 cap are implemented in Rust. Final rubric grades control naming and routing. **HyperIQA is a separate diagnostic and no longer determines output names or folders.**
+
+**A complete automatic visual reviewer is still missing.** Existing measurements do not establish aircraft zones, motion intent, defect severity or six category grades. Such photos remain **Needs review / Unrated**, with no scored output copy. A named reviewer can provide a source-checksum-bound visual assessment through the report's review import; explicit Resume then applies it. This is an evidence-integrated workflow, not demonstrated autonomous review.
+
+Fourteen Rust component tests and the synthetic existing-helper bridge check pass. Score comparisons and full-shoot end-to-end acceptance remain deferred at Robert's request. Actual notification delivery and the full batch lifecycle remain unverified. No installer is provided.
 
 See [local integration](docs/LOCAL-INTEGRATION.md), the [implementation plan](docs/PLAN.md), and the earlier [scoring proof](docs/SCORER-PROOF.md). Private dashboard data, downloaded runtimes and model weights are not included.
 

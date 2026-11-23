@@ -18,10 +18,26 @@ Jobs and per-photo results persist in `.local/jobs.sqlite`, separate from the ar
 
 Choose a shoot directory beneath an approved root, rather than the entire output drive. The output root must be outside the source shoot directory. Junctions and symlinks are rejected. Outputs use safe suffixes and verified copies; existing unrelated files are never overwritten. CR3 files are rendered to temporary TIFFs for scoring, while routed CR3 outputs preserve original bytes.
 
-Rounded provisional HyperIQA values route aviation photos to Gallery at 92+, Under 80 Review below 80, or Updated Photos at 80–91 when the registration label is known. Missing registration at 80–91 routes to Unknown Registration Review. The user's Non-aviation selection routes to Non-aviation Review. This declared content type is not an automatic classifier. Filename metadata is retained where available; missing labels stay Unknown. Output thresholds have not been calibrated against historical grades.
+Final **rubric 14** grades route aviation photos to Gallery at 92+, Under 80 Review below 80, Updated Photos at 80-91 with a known registration, or Unknown Registration Review at 80-91 with an unknown registration. The user's Non-aviation selection routes graded non-aircraft photos to Non-aviation Review. This declared content type is not an automatic classifier. No reliable rubric assessment means Unrated, no scored name, and no output copy. HyperIQA never controls routing or names.
 
-The results view reports progress, errors, destinations and identification gaps. Download shoot report saves the complete local JSON result. The Windows toast handler records submission or an error; Windows notification settings can affect popup visibility. Its link opens the local Processing tab.
+## Existing evidence tools
+
+The adapter supplies a private `tools` configuration containing the existing analysis/OCR Python executables, technical and registration helper scripts, archive database, and this repository's `analysis/collect_evidence.py` bridge. No image-analysis code is rewritten merely to use Rust.
+
+The bridge collects native full-frame measurement tiles (background included, not detected aircraft zones), EXIF from decoded files, OCR suggestions from a bounded full-frame preview, and exact-SHA archive identity metadata. Saved user registration confirmations take precedence over filename-derived archive metadata. Conflicts stay Unknown. No historical score is selected. RAW evidence refers to the temporary full-resolution render and is bound to the original CR3 checksum; LibRaw rendering may omit original camera EXIF, which remains unknown in that case. OCR preview downsizing can miss small text. Suggestions are never auto-confirmed.
+
+## Visual assessment and reports
+
+`src/review.rs` enforces rubric 14 arithmetic and dependencies, one motion mode, PAN anchor evidence, FPAN severity ceilings, failed-zone gates, processing/exposure/color/noise ceilings, 93/94/96/elite requirements, and the separate boundary-truncation cap. Confidence widens uncertainty; it does not impose an automatic quality deduction. The evidence-ledger owner and category observations remain in each report.
+
+The required observations are **not inferred from OpenCV metrics or HyperIQA**. When they are absent the photo becomes `needs_review`; a shoot with such files becomes `awaiting_review`. An autonomous native-detail visual reviewer is still absent. The report explains missing evidence and helper errors rather than inventing scores.
+
+A named reviewer can provide a JSON submission using `examples/review-submission.json` as a format reference. Its placeholder text must be replaced with actual observations; the example is not a real assessment. Use the photo ordinal and original SHA-256 from the downloaded report, rubric version 14, six category scores and evidence, five zones, motion/completeness, confidence/range, defect ledger and diagnosis. Optional identification overrides need labels plus supporting evidence. Load it through **Load completed visual review** or authenticated POST `/jobs/{id}/review`. Completed/planned copies cannot be silently rescored. Reviews for changed bytes are rejected. Importing never copies a photo; explicit Resume applies accepted reviews.
+
+The expandable per-photo report displays category scores, raw/technical/final grades, gates, confidence range, zones, primary flaw, OCR suggestions and unresolved identity. Download the full JSON report or CSV manifest. The manifest includes one row per supported/unsupported input, unrated and failed states, source/destination names and sizes, checksums, and grading context. Unknown metadata stays explicit. Native tool provenance and complete observations remain in JSON. CSV export protects formula-like values.
 
 ## Verification boundary
 
-Six component tests cover preprocessing, invalid score rejection, 16-bit render decoding, routing boundaries, copy integrity/no overwrite, persisted recovery and idempotent Start. A real CR3 decoder-only check passed. No new actual-photo score comparisons or full-shoot acceptance runs were performed during this integration, as requested. Notification delivery and full batch completion must be checked when that deferred acceptance phase is authorized.
+Fourteen Rust component tests cover existing preprocessing/copy/recovery behavior plus rubric dependencies and ceilings, failed pans/zones, framing, uncertainty, duplicate-ledger rejection and unrated/no-output behavior. `tests/check_existing_tools.py <dashboard-directory>` checks the real helper bridge and read-only identity conflict handling on generated fixtures, with no shoot job or real-photo grade.
+
+No actual-photo score comparisons, full-shoot acceptance or actual notification delivery checks were performed in this update. These remain deferred. Passing component checks does not establish accuracy of future visual assessments or full-batch readiness.

@@ -4,7 +4,9 @@ Status: local Rust/dashboard integration is implemented; component checks pass. 
 
 ## Implementation boundary
 
-The current implementation provides local job infrastructure and provisional HyperIQA routing. It does not yet implement the full rubric, automated aircraft identification or calibrated historical scoring described in the target product below. Those target requirements are not verified capabilities. See [current integration and verification limits](LOCAL-INTEGRATION.md).
+Existing technical/OCR/EXIF helpers and exact-byte archive identity reuse are now connected. Rust rubric 14 arithmetic, dependencies and gates operate on explicit visual-review evidence; final grades drive names and folders. Reports include the breakdown and unresolved evidence. HyperIQA is diagnostic only. The existing helpers do not supply the visual judgments needed for the rubric: autonomous aircraft-zone/motion/defect assessment remains missing. Such photos stay Needs review / Unrated, without a scored copy. See [current integration and verification limits](LOCAL-INTEGRATION.md).
+
+The target product below is not a claim of autonomous capability. Score comparisons and full-shoot acceptance remain explicitly deferred.
 
 ## The product
 
