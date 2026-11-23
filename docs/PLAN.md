@@ -1,6 +1,10 @@
 # Shoot to Post — Local dashboard and Windows processing plan
 
-Status: local dashboard retained at Robert's request. Website/cloud integration is deferred. JPEG plus Canon CR3 input and the public `shoot-to-post` GitHub repository remain confirmed for the planned one-button workflow. The one-photo Rust scoring proof is now implemented; the complete one-button workflow remains unfinished.
+Status: local Rust/dashboard integration is implemented; component checks pass. Robert explicitly deferred score comparisons/calibration and full-shoot acceptance (former points 1 and 5). Build CR3, batch jobs, local dashboard controls, output copies and summaries first. Website/cloud integration remains deferred. JPEG plus Canon CR3 and the public repository remain confirmed.
+
+## Implementation boundary
+
+The current implementation provides local job infrastructure and provisional HyperIQA routing. It does not yet implement the full rubric, automated aircraft identification or calibrated historical scoring described in the target product below. Those target requirements are not verified capabilities. See [current integration and verification limits](LOCAL-INTEGRATION.md).
 
 ## The product
 
@@ -78,13 +82,13 @@ The photography website is managed through ChatGPT Sites; integration can be rev
 
 The local dashboard, existing Windows folders, JPEG plus CR3, public visibility and repository name are confirmed. Website integration is deferred. Robert authorized the first build: a one-photo HyperIQA scorer in Rust with a reference comparison. That proof is implemented. Record scope changes before expanding beyond the agreed local workflow.
 
-### 2. Establish review quality before a large application build
+### 2. Score comparison — deferred by Robert
 
 Use a small, explicitly selected reference shoot with full-size JPEGs and real CR3 files, including RAW/JPEG pairs, RAW orientation, rendering and decoder-failure cases. Include frozen action, successful/failed pans, cropped aircraft, difficult registrations, and relevant score boundaries. Historical ratings are reference evidence, not automatically an adjudicated ground truth. Obtain Robert's agreement on reference outcomes and acceptable differences before evaluating acceptance.
 
 Compare a candidate local reviewer against those references and repeated blinded runs. Check actual crop/motion/gate behavior, category arithmetic, identification errors, Unrated handling, runtime and peak memory on this PC. Report measured results. Do not claim that a Rust rewrite alone improves model quality or inference speed.
 
-This is a release gate for unattended review, not an optional accuracy report to add after shipping. A failed model evaluation leaves the one-button requirement unfinished.
+Robert requested that integration be completed before returning to score checks. Do not run these comparisons in the current integration phase. Raw HyperIQA results are explicitly provisional and remain separate from historical rubric scores. Integration readiness is not evidence of scoring accuracy.
 
 ### 3. Build the first end-to-end job
 
@@ -96,9 +100,9 @@ Test cancellation, app restart, partial output recovery, duplicate input, same-n
 
 Verify local startup, notification, notification activation, runtime/model availability and complete review on a realistic shoot. A future worker installer must be tested as installed before claiming that packaging is finished. Operation must not depend on a Codex runtime path or an active Codex chat. Verify the existing dashboard/history still works. Test local request validation, restart recovery, PC sleep and unavailable drives. No remote commands, cloud pairing or summary synchronization are needed in this phase.
 
-### 5. Accept the finished workflow
+### 5. Full-shoot acceptance — deferred by Robert
 
-Robert runs a shoot, receives the notification, reviews the photos/summary, and confirms the result meets the agreed process. A working window, mock assessment, simulated notification or successful unit test is not completion of this product.
+Defer this full-shoot acceptance run until Robert requests it. Build and check individual components without processing a real shoot. Functional wiring must not be reported as validated full-shoot behavior or calibrated scoring.
 
 ## GitHub repository
 

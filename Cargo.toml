@@ -7,10 +7,19 @@ description = "Local HyperIQA scoring proof; preserves original images and archi
 
 [dependencies]
 anyhow = "1.0"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }
 serde_json = "1.0"
 sha2 = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+tempfile = "3.20"
+rusqlite = "0.32.1"
+tiny_http = "0.12"
+
+[target.'cfg(windows)'.dependencies]
+rfd = { version = "0.15", default-features = false }
+winrt-notification = "0.5"
+windows = { version = "0.24.0", features = ["Data_Xml_Dom", "UI_Notifications"] }
 
 [profile.release]
 lto = "thin"

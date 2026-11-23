@@ -13,6 +13,7 @@ $savedPath = $env:PATH
 $savedFlags = $env:RUSTFLAGS
 $savedEncodedFlags = $env:CARGO_ENCODED_RUSTFLAGS
 $savedLinker = $env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER
+$savedSqlite = $env:SQLITE3_LIB_DIR
 Push-Location $project
 try {
     if ($Gnu) {
@@ -31,6 +32,10 @@ try {
         $dlltool = (Join-Path $bin 'self-contained/dlltool.exe').Replace('\','/')
         $env:CARGO_ENCODED_RUSTFLAGS = @('-C','linker-flavor=ld.lld','-C','link-self-contained=yes','-C',('dlltool='+$dlltool)) -join [char]31
         $target = @('--target', 'x86_64-pc-windows-gnu')
+        $sqlite = Join-Path $project '.local/sqlite'
+        if (!(Test-Path -LiteralPath (Join-Path $sqlite 'libsqlite3.a'))) { throw 'Prepare the local SQLite import library before building the worker.' }
+        $env:SQLITE3_LIB_DIR = $sqlite
+        $env:PATH = $sqlite + ';' + $env:PATH
     }
     $operation = if ($Test) { 'test' } else { 'build' }
     $cargoProfileArgs = @()
@@ -43,4 +48,5 @@ try {
     $env:RUSTFLAGS = $savedFlags
     $env:CARGO_ENCODED_RUSTFLAGS = $savedEncodedFlags
     $env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = $savedLinker
+    $env:SQLITE3_LIB_DIR = $savedSqlite
 }

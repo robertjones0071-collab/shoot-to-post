@@ -1,0 +1,8 @@
+.shoot-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:20px}
+.shoot-form label{display:grid;gap:8px;font-size:14px;color:var(--muted);min-width:0}
+.shoot-path{display:flex;gap:8px;min-width:0}.shoot-path input{flex:1;min-width:0;width:100%;font-size:14px;color:var(--ink)}.shoot-path button{flex-shrink:0}
+.shoot-form select{width:100%;font-size:14px}.shoot-form>p{grid-column:1/-1}.shoot-form>button{justify-self:start;align-self:end}
+.shoot-job{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}.shoot-job h3,#shoot-details h3{font-size:16px;font-weight:600}
+.shoot-job progress{display:block;width:100%;height:10px;margin-top:12px;accent-color:var(--accent)}.shoot-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+#shoot-details{margin-top:24px}#shoot-details td{max-width:360px;overflow-wrap:anywhere;white-space:normal}#shoot-message{overflow-wrap:anywhere}
+@media(max-width:700px){.shoot-form{grid-template-columns:minmax(0,1fr)}.shoot-form>button{width:100%}.shoot-path input{width:0}.shoot-actions button{flex:1;min-width:140px}}

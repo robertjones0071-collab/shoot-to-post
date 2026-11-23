@@ -1,28 +1,20 @@
 # Shoot to Post
 
-A local aviation photography dashboard, with a planned Windows Rust workflow for one-button shoot review.
+A local aviation photography dashboard, with a Windows Rust workflow for one-button shoot review.
 
-**Planned workflow: Open the local dashboard → Select a shoot → Cull Through Review → Receive a local notification and summary.**
+**Workflow: Open the local dashboard → Select a shoot → Cull Through Review → Receive a local notification and summary.**
 
 Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluation using the existing rubric, evidence-backed identification, safe naming, verified output copies and a shoot summary. Original input files remain unchanged in the existing Windows folders. Photos, processing and summaries stay local. Website integration is deferred.
 
 ## Current status
 
-The existing local dashboard remains the interface for now. The first Rust scoring proof is implemented: a native Windows executable runs pretrained HyperIQA through ONNX Runtime, reads a JPEG/PNG, and emits a raw quality score without changing the source or archive ratings. One actual-photo reference comparison and a repeat run passed. See [build, run and measured results](docs/SCORER-PROOF.md).
+The existing local dashboard now connects to a native Rust job worker in its Processing tab. Select a shoot folder, choose its content type, and start. The worker supports JPEG and Canon CR3 inputs, persists progress in a separate SQLite database, provides cancellation and resume, and produces checksum-verified output copies without changing originals. Results and a downloadable JSON report appear in the dashboard; the completion handler submits a Windows notification linking back to Processing.
 
-This is a scoring proof, not the complete cull-through-review application. CR3 decoding, batch orchestration, notifications and dashboard integration remain unfinished. No installer or validated autonomous aviation reviewer is available yet. Private dashboard data and model weights are not included.
+HyperIQA supplies **provisional raw model scores**, not calibrated aviation rubric grades. Existing filename labels are reused; missing airline, aircraft or registration values remain Unknown. This version does not provide automatic aircraft identification or the complete technical rubric. Existing archive ratings and human decisions remain separate.
 
-Read the [implementation plan](docs/PLAN.md) for scope, folder routing, architecture and acceptance gates.
+The Windows release builds and six component tests pass. A real CR3 decoder-only check produced a full-resolution TIFF without changing the original. Dashboard/API readiness is checked separately. **Score comparisons and full-shoot end-to-end acceptance are deferred at Robert's request.** Actual notification delivery and the complete batch lifecycle therefore remain unverified. No installer is provided.
 
-## Intended approach
-
-- Keep the accepted local dashboard and existing Windows folders.
-- Add a local Rust job engine after the implementation plan is reviewed.
-- Keep dashboard-to-worker communication on the PC.
-- Reuse working image-analysis helpers where appropriate.
-- Reuse a pretrained scoring model for v1 and run it from Rust; HyperIQA is the first candidate. See [model research](docs/SCORING-MODEL.md). Custom training is deferred.
-- Preserve scoring evidence, model/rubric versions and original files.
-- Resume interrupted jobs and report failures honestly.
+See [local integration](docs/LOCAL-INTEGRATION.md), the [implementation plan](docs/PLAN.md), and the earlier [scoring proof](docs/SCORER-PROOF.md). Private dashboard data, downloaded runtimes and model weights are not included.
 
 ## Scope
 

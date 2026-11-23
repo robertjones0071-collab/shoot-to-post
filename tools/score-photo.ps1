@@ -9,5 +9,6 @@ if (!$ExecutablePath) { throw 'Build the scoring executable first.' }
 $model = Join-Path $project '.local/hyperiqa.onnx'
 $record = Get-Content -LiteralPath (Join-Path $project '.local/hyperiqa.source.json') -Raw | ConvertFrom-Json
 $runtime = Join-Path $project '.local/export-packages/onnxruntime/capi/onnxruntime.dll'
-& $ExecutablePath --model $model --model-sha256 $record.onnxSha256 --runtime $runtime --image $ImagePath
+$decoder = Join-Path $project '.local/libraw/LibRaw-0.22.3/bin/dcraw_emu.exe'
+& $ExecutablePath --model $model --model-sha256 $record.onnxSha256 --runtime $runtime --raw-decoder $decoder --image $ImagePath
 if ($LASTEXITCODE -ne 0) { throw 'Photo scoring failed; no result was saved to the archive.' }
