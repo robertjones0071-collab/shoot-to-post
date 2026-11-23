@@ -4,13 +4,13 @@ Status: local Rust/dashboard integration is implemented; component checks pass. 
 
 ## Implementation boundary
 
-Existing technical/OCR/EXIF helpers and exact-byte archive identity reuse are now connected. Rust rubric 14 arithmetic, dependencies and gates operate on explicit visual-review evidence; final grades drive names and folders. Reports include the breakdown and unresolved evidence. HyperIQA is diagnostic only. The existing helpers do not supply the visual judgments needed for the rubric: autonomous aircraft-zone/motion/defect assessment remains missing. Such photos stay Needs review / Unrated, without a scored copy. See [current integration and verification limits](LOCAL-INTEGRATION.md).
+Existing technical/OCR/EXIF helpers and exact-byte archive identity reuse are now connected. Rust rubric 14 arithmetic, dependencies and gates operate on explicit visual-review evidence; final grades drive names and folders. Reports include the breakdown and unresolved evidence. HyperIQA is diagnostic only. The existing helpers do not supply the visual judgments needed for the rubric: automatic aircraft-zone/motion/defect assessment is now supplied by local Qwen3-VL-2B, with typed Rust validation; real-photo accuracy remains unvalidated. Photos lacking sufficient visual evidence stay Unrated, without a scored copy. See [current integration and verification limits](LOCAL-INTEGRATION.md).
 
-The target product below is not a claim of autonomous capability. Score comparisons and full-shoot acceptance remain explicitly deferred.
+The target requirements below are not evidence of tested accuracy or full-shoot acceptance. Score comparisons and full-shoot acceptance remain explicitly deferred.
 
 ## The product
 
-Keep using the existing **local dashboard** on the Windows PC. The planned next capability is to select a shoot from existing Windows folders, click **Cull Through Review**, and receive a local completion notification and summary. Photos and processing stay on the PC. The one-button capability remains planned; retaining the working dashboard does not mean it is already implemented.
+Keep using the existing **local dashboard** on the Windows PC. The implemented control lets the user select a shoot from existing Windows folders, click **Cull Through Review**, and receive a local completion notification and summary. Photos and processing stay on the PC. The one-button processing path is implemented; complete-shoot validation remains deferred.
 
 The existing local dashboard is the agreed interface for now; Windows remains the processing platform. No website tab, cloud service, account system or new desktop-window redesign is being built in this phase. GitHub is now part of the project, replacing the earlier local-only deferral. Robert confirmed repository name `shoot-to-post` and public visibility. Working application name: **Shoot to Post**.
 

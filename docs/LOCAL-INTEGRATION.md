@@ -30,7 +30,7 @@ The bridge collects native full-frame measurement tiles (background included, no
 
 `src/review.rs` enforces rubric 14 arithmetic and dependencies, one motion mode, PAN anchor evidence, FPAN severity ceilings, failed-zone gates, processing/exposure/color/noise ceilings, 93/94/96/elite requirements, and the separate boundary-truncation cap. Confidence widens uncertainty; it does not impose an automatic quality deduction. The evidence-ledger owner and category observations remain in each report.
 
-The required observations are **not inferred from OpenCV metrics or HyperIQA**. When they are absent the photo becomes `needs_review`; a shoot with such files becomes `awaiting_review`. An autonomous native-detail visual reviewer is still absent. The report explains missing evidence and helper errors rather than inventing scores.
+The required observations are **not inferred from OpenCV metrics or HyperIQA**; the local Qwen3-VL reviewer now supplies them automatically. See [automatic reviewer](AUTOMATIC-REVIEWER.md). When they are absent the photo becomes `needs_review`; a shoot with such files becomes `awaiting_review`. Automatic Qwen assessments use an overview plus model-grounded native detail crops, with typed Rust validation and one correction retry. The report explains missing evidence and helper errors rather than inventing scores.
 
 A named reviewer can provide a JSON submission using `examples/review-submission.json` as a format reference. Its placeholder text must be replaced with actual observations; the example is not a real assessment. Use the photo ordinal and original SHA-256 from the downloaded report, rubric version 14, six category scores and evidence, five zones, motion/completeness, confidence/range, defect ledger and diagnosis. Optional identification overrides need labels plus supporting evidence. Load it through **Load completed visual review** or authenticated POST `/jobs/{id}/review`. Completed/planned copies cannot be silently rescored. Reviews for changed bytes are rejected. Importing never copies a photo; explicit Resume applies accepted reviews.
 
@@ -38,6 +38,6 @@ The expandable per-photo report displays category scores, raw/technical/final gr
 
 ## Verification boundary
 
-Fourteen Rust component tests cover existing preprocessing/copy/recovery behavior plus rubric dependencies and ceilings, failed pans/zones, framing, uncertainty, duplicate-ledger rejection and unrated/no-output behavior. `tests/check_existing_tools.py <dashboard-directory>` checks the real helper bridge and read-only identity conflict handling on generated fixtures, with no shoot job or real-photo grade.
+Fifteen Rust component tests cover existing preprocessing/copy/recovery behavior plus rubric dependencies and ceilings, failed pans/zones, framing, uncertainty, duplicate-ledger rejection and unrated/no-output behavior. `tests/check_existing_tools.py <dashboard-directory>` checks the real helper bridge and read-only identity conflict handling on generated fixtures, with no shoot job or real-photo grade.
 
 No actual-photo score comparisons, full-shoot acceptance or actual notification delivery checks were performed in this update. These remain deferred. Passing component checks does not establish accuracy of future visual assessments or full-batch readiness.

@@ -28,7 +28,7 @@ async function configure(){
    await mkdir(path.dirname(settingsFile),{recursive:true});await writeFile(settingsFile,JSON.stringify(settings,null,2),{flag:'wx'});
   }
   const base=path.join(project,'../aviation-dashboard');
-  const tools={analysisPython:path.join(base,'vendor/analysis-env/Scripts/python.exe'),ocrPython:path.join(base,'vendor/ocr-env/Scripts/python.exe'),technicalScript:path.join(base,'analysis/technical_worker.py'),registrationScript:path.join(base,'analysis/registration_worker.py'),collector:path.join(project,'analysis/collect_evidence.py'),archiveDatabase:path.join(base,'data/archive.sqlite')};
+  const tools={analysisPython:path.join(base,'vendor/analysis-env/Scripts/python.exe'),ocrPython:path.join(base,'vendor/ocr-env/Scripts/python.exe'),technicalScript:path.join(base,'analysis/technical_worker.py'),registrationScript:path.join(base,'analysis/registration_worker.py'),collector:path.join(project,'analysis/collect_evidence.py'),archiveDatabase:path.join(base,'data/archive.sqlite'),visualReviewer:path.join(project,'analysis/visual_reviewer.py'),visionManifest:path.join(project,'.local/vision/source.json')};
   if(JSON.stringify(settings.tools)!==JSON.stringify(tools)){settings.tools=tools;await writeFile(settingsFile,JSON.stringify(settings,null,2));}
   return settings;
  })().catch(error=>{setupPromise=null;throw error;});return setupPromise;

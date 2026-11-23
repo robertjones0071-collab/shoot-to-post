@@ -19,8 +19,20 @@ pub struct Tools {
     pub registration_script: PathBuf,
     pub collector: PathBuf,
     pub archive_database: PathBuf,
+    #[serde(default)]
+    pub visual_reviewer: Option<PathBuf>,
+    #[serde(default)]
+    pub vision_manifest: Option<PathBuf>,
 }
 fn helper(python: &Path, script: &Path, request: Value) -> Result<Value> {
+    helper_deadline(python, script, request, Duration::from_secs(180))
+}
+fn helper_deadline(
+    python: &Path,
+    script: &Path,
+    request: Value,
+    timeout: Duration,
+) -> Result<Value> {
     let out = tempfile::NamedTempFile::new()?;
     let err = tempfile::NamedTempFile::new()?;
     let mut child = quiet_command(python)
@@ -47,7 +59,7 @@ fn helper(python: &Path, script: &Path, request: Value) -> Result<Value> {
         if let Some(s) = child.try_wait()? {
             break s;
         }
-        if started.elapsed() > Duration::from_secs(180) {
+        if started.elapsed() > timeout {
             let _ = child.kill();
             let _ = child.wait();
             bail!("Evidence helper timed out");
@@ -118,4 +130,49 @@ pub fn collect(tools: &Tools, source: &Path, decoder: &Path) -> Result<Value> {
         json!({"engine":"existing-local-tools-bridge-v1","sourceSha256":sha,"renderedInputSha256":input_sha,"rawRendered":is_raw,"technical":technical,"registrationOcr":ocr,"archiveIdentity":identity,"errors":errors,
  "missingEvidence":["Reviewed native aircraft zones and completeness","Evidence-backed motion classification","Six category scores with observations and defect severity"],"automaticVisualReviewer":false}),
     )
+}
+
+/// Automatic model review is bound to the original bytes, including rendered CR3 inputs.
+pub fn automatic_review(
+    tools: &Tools,
+    source: &Path,
+    decoder: &Path,
+    evidence: &Value,
+    correction: Option<&str>,
+) -> Result<Value> {
+    let sha = file_hash(source)?;
+    let script = tools
+        .visual_reviewer
+        .as_ref()
+        .context("Automatic visual reviewer is not configured")?;
+    let manifest = tools
+        .vision_manifest
+        .as_ref()
+        .context("Vision model manifest missing")?;
+    let is_raw = source
+        .extension()
+        .is_some_and(|e| e.to_string_lossy().eq_ignore_ascii_case("cr3"));
+    let rendering = if is_raw {
+        Some(render_raw(source, decoder)?)
+    } else {
+        None
+    };
+    let input = rendering.as_ref().map_or(source, |f| f.path());
+    let input_sha = file_hash(input)?;
+    let mut result = helper_deadline(
+        &tools.analysis_python,
+        script,
+        json!({"source":input,"manifest":manifest,"ocrLines":evidence["registrationOcr"]["lines"],"correction":correction}),
+        Duration::from_secs(1800),
+    )?;
+    if result["inputSha256"].as_str() != Some(input_sha.as_str()) || file_hash(source)? != sha {
+        bail!("Photo changed during automatic visual review");
+    }
+    result["sourceSha256"] = json!(sha);
+    result["rawRendered"] = json!(is_raw);
+    Ok(result)
+}
+pub fn automatic_configured(tools: &Tools) -> bool {
+    tools.visual_reviewer.as_ref().is_some_and(|p| p.is_file())
+        && tools.vision_manifest.as_ref().is_some_and(|p| p.is_file())
 }

@@ -1,0 +1,457 @@
+{
+  "grounding": {
+    "type": "object",
+    "properties": {
+      "subjectClass": {
+        "type": "string",
+        "enum": [
+          "aircraft",
+          "transportation",
+          "other",
+          "uncertain"
+        ]
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      },
+      "zoneCenters": {
+        "type": "object",
+        "properties": {
+          "cockpit": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 1000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "nose": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 1000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "midbody": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 1000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "mechanical": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 1000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "tail": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 1000
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "cockpit",
+          "nose",
+          "midbody",
+          "mechanical",
+          "tail"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "subjectClass",
+      "description",
+      "zoneCenters"
+    ],
+    "additionalProperties": false
+  },
+  "assessment": {
+    "type": "object",
+    "properties": {
+      "assessable": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      },
+      "review": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "focusMotion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 25
+              },
+              "exposure": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 15
+              },
+              "noise": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "color": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "processing": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "detail",
+              "focusMotion",
+              "exposure",
+              "noise",
+              "color",
+              "processing"
+            ],
+            "additionalProperties": false
+          },
+          "categoryEvidence": {
+            "type": "object",
+            "properties": {
+              "detail": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "focusMotion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "exposure": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "noise": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "color": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "processing": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              }
+            },
+            "required": [
+              "detail",
+              "focusMotion",
+              "exposure",
+              "noise",
+              "color",
+              "processing"
+            ],
+            "additionalProperties": false
+          },
+          "zones": {
+            "type": "object",
+            "properties": {
+              "cockpit": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "strong",
+                  "acceptable",
+                  "soft",
+                  "failed",
+                  "not-visible"
+                ]
+              },
+              "nose": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "strong",
+                  "acceptable",
+                  "soft",
+                  "failed",
+                  "not-visible"
+                ]
+              },
+              "midbody": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "strong",
+                  "acceptable",
+                  "soft",
+                  "failed",
+                  "not-visible"
+                ]
+              },
+              "mechanical": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "strong",
+                  "acceptable",
+                  "soft",
+                  "failed",
+                  "not-visible"
+                ]
+              },
+              "tail": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "strong",
+                  "acceptable",
+                  "soft",
+                  "failed",
+                  "not-visible"
+                ]
+              }
+            },
+            "required": [
+              "cockpit",
+              "nose",
+              "midbody",
+              "mechanical",
+              "tail"
+            ],
+            "additionalProperties": false
+          },
+          "motionMode": {
+            "type": "string",
+            "enum": [
+              "FRZ",
+              "PAN",
+              "FPAN",
+              "AMB"
+            ]
+          },
+          "motionConfidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "completeness": {
+            "type": "string",
+            "enum": [
+              "whole",
+              "cut-off",
+              "uncertain",
+              "not-applicable"
+            ]
+          },
+          "cockpitIsTarget": {
+            "type": "boolean"
+          },
+          "closeInspection": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "uncertainty": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "strongestAttribute": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "primaryFlaw": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "likelyCause": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "defects": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "focus",
+                    "shake",
+                    "subject-blur",
+                    "failed-pan",
+                    "heat-haze",
+                    "window-distortion",
+                    "resolution-loss",
+                    "important-clipping",
+                    "blocked-shadows",
+                    "noise",
+                    "compression",
+                    "pixelation",
+                    "color-cast",
+                    "glass-tint",
+                    "mixed-light",
+                    "halos",
+                    "waxy-denoise",
+                    "masking",
+                    "artificial-texture",
+                    "detail-loss",
+                    "inconsistency"
+                  ]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "trace",
+                    "mild",
+                    "moderate",
+                    "major",
+                    "severe"
+                  ]
+                },
+                "evidence": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "required": [
+                "kind",
+                "severity",
+                "evidence"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "categories",
+          "categoryEvidence",
+          "zones",
+          "motionMode",
+          "motionConfidence",
+          "completeness",
+          "cockpitIsTarget",
+          "closeInspection",
+          "confidence",
+          "uncertainty",
+          "strongestAttribute",
+          "primaryFlaw",
+          "likelyCause",
+          "defects"
+        ],
+        "additionalProperties": false
+      },
+      "identification": {
+        "type": "object",
+        "properties": {
+          "airline": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "aircraft": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "registration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "airline": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "aircraft": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "registration": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              }
+            },
+            "required": [
+              "airline",
+              "aircraft",
+              "registration"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "airline",
+          "aircraft",
+          "registration",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "assessable",
+      "reason",
+      "review",
+      "identification"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -73,6 +73,12 @@ struct Item {
     visual_review: Option<VisualReview>,
     #[serde(default)]
     identification_review: Option<IdentificationReview>,
+    #[serde(default)]
+    automatic_review: Option<Value>,
+    #[serde(default)]
+    effective_kind: Option<String>,
+    #[serde(default)]
+    stage: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -246,8 +252,8 @@ fn summary(db: &Connection, job: &Job, detail: bool) -> Result<Value> {
     Ok(value)
 }
 fn create_job(app: &App, request: NewJob) -> Result<Value> {
-    if !["aviation", "non-aviation"].contains(&request.kind.as_str()) {
-        bail!("Choose aviation or non-aviation for this shoot");
+    if !["automatic", "aviation", "non-aviation"].contains(&request.kind.as_str()) {
+        bail!("Choose automatic detection, aviation or non-aviation for this shoot");
     }
     let source = approved(&request.source, &app.settings)?;
     let output = approved(&request.output, &app.settings)?;
@@ -324,6 +330,9 @@ fn create_job(app: &App, request: NewJob) -> Result<Value> {
                     evidence: None,
                     visual_review: None,
                     identification_review: None,
+                    automatic_review: None,
+                    effective_kind: None,
+                    stage: None,
                 },
             )?;
         }
@@ -404,6 +413,21 @@ fn verified_copy(source: &Path, destination: &Path, expected: &str) -> Result<bo
     }
     Ok(true)
 }
+fn validated_automatic(automatic: &Value) -> Result<(VisualReview, String)> {
+    if automatic["assessable"].as_bool() != Some(true) {
+        bail!("Automatic model did not establish an assessable image");
+    }
+    let kind = automatic["effectiveKind"]
+        .as_str()
+        .context("Missing detected subject type")?
+        .to_owned();
+    if !["aviation", "non-aviation"].contains(&kind.as_str()) {
+        bail!("Invalid automatic subject classification");
+    }
+    let review: VisualReview = serde_json::from_value(automatic["review"].clone())?;
+    review::evaluate(&review, kind == "aviation")?;
+    Ok((review, kind))
+}
 fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Scorer>) -> Result<()> {
     let source = approved(&item.source, &app.settings)?;
     // A recorded output plan is a recovery checkpoint, not permission to replace any file.
@@ -450,6 +474,53 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
             &app.settings.raw_decoder,
         )?);
     }
+    if item.visual_review.is_none() {
+        if let Some(tools) = app
+            .settings
+            .tools
+            .as_ref()
+            .filter(|t| evidence::automatic_configured(t))
+        {
+            item.stage = Some("Automatic visual review on local CPU".into());
+            save_item(&app.db.lock().unwrap(), &job.id, item)?;
+            let mut correction = None;
+            for attempt in 0..2 {
+                let mut automatic = evidence::automatic_review(
+                    tools,
+                    &source,
+                    &app.settings.raw_decoder,
+                    item.evidence
+                        .as_ref()
+                        .context("Missing collected evidence")?,
+                    correction.as_deref(),
+                )?;
+                automatic["attempt"] = json!(attempt + 1);
+                if automatic["assessable"].as_bool() != Some(true) {
+                    item.automatic_review = Some(automatic);
+                    break;
+                }
+                let validated = validated_automatic(&automatic);
+                match validated {
+                    Ok((review, kind)) => {
+                        automatic["accepted"] = json!(true);
+                        item.visual_review = Some(review);
+                        item.effective_kind = Some(kind);
+                        item.automatic_review = Some(automatic);
+                        break;
+                    }
+                    Err(error) => {
+                        let message = format!("{error:#}");
+                        automatic["accepted"] = json!(false);
+                        automatic["validationError"] = json!(message);
+                        item.automatic_review = Some(automatic);
+                        correction = Some(message);
+                    }
+                }
+            }
+            save_item(&app.db.lock().unwrap(), &job.id, item)?;
+        }
+    }
+    let effective_kind = item.effective_kind.as_deref().unwrap_or(&job.kind);
     let mut names = labels(&source);
     let mut provenance = vec!["existing filename claim"; 3];
     if let Some(evidence) = &item.evidence {
@@ -468,6 +539,52 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
                     names[i] = slug(label);
                     provenance[i] = "exact SHA-256 archive metadata";
                 }
+            }
+        }
+    }
+    if let Some(automatic) = item
+        .automatic_review
+        .as_ref()
+        .filter(|v| v["accepted"].as_bool() == Some(true))
+    {
+        let proposed = &automatic["identification"];
+        for (i, key) in ["airline", "aircraft", "registration"].iter().enumerate() {
+            let Some(label) = proposed[*key]
+                .as_str()
+                .filter(|s| !s.trim().is_empty() && *s != "Unknown")
+            else {
+                continue;
+            };
+            if proposed["evidence"][*key]
+                .as_str()
+                .is_none_or(|e| e.trim().is_empty())
+            {
+                continue;
+            }
+            // Registrations require exact independent OCR agreement as well as visual evidence.
+            if i == 2
+                && !item
+                    .evidence
+                    .as_ref()
+                    .and_then(|e| e["registrationOcr"]["lines"].as_array())
+                    .is_some_and(|lines| {
+                        lines.iter().any(|line| {
+                            line["registrationLike"].as_bool() == Some(true)
+                                && line["normalized"]
+                                    .as_str()
+                                    .is_some_and(|v| v.eq_ignore_ascii_case(label))
+                        })
+                    })
+            {
+                continue;
+            }
+            let proposed = slug(label);
+            if names[i] == "Unknown" && !provenance[i].contains("conflict") {
+                names[i] = proposed;
+                provenance[i] = "automatic visual identification hypothesis";
+            } else if names[i] != "Unknown" && !names[i].eq_ignore_ascii_case(&proposed) {
+                names[i] = "Unknown".into();
+                provenance[i] = "automatic/existing identity conflict";
             }
         }
     }
@@ -494,22 +611,23 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
         json!({"error":"Optional HyperIQA model unavailable"})
     };
     let result = if let Some(review) = &item.visual_review {
-        review::evaluate(review, job.kind == "aviation")?
+        review::evaluate(review, effective_kind == "aviation")?
     } else {
-        json!({"status":"needs_review","rubricVersion":14,"finalScore":null,"reason":"Native visual observations and six evidenced category scores are required; measurements and OCR cannot supply them"})
+        json!({"status":"needs_review","rubricVersion":14,"finalScore":null,"reason":item.automatic_review.as_ref().and_then(|v|v["reason"].as_str().or(v["validationError"].as_str())).unwrap_or("Automatic visual reviewer is unavailable or could not support a reliable assessment")})
     };
     item.assessment = Some(
-        json!({"sourceSha256":sha,"rubric":result,"modelDiagnostic":diagnostic,"identification":{"labels":names,"basis":provenance,"review":item.identification_review,"registrationOcrAcceptedAutomatically":false}}),
+        json!({"sourceSha256":sha,"rubric":result,"automaticModelAssessment":item.automatic_review,"effectiveKind":effective_kind,"modelDiagnostic":diagnostic,"identification":{"labels":names,"basis":provenance,"review":item.identification_review,"registrationOcrAcceptedAutomatically":false}}),
     );
     let Some(final_score) = result["finalScore"].as_u64() else {
         item.score = None;
         item.state = "needs_review".into();
+        item.stage = Some("Unrated: automatic evidence insufficient".into());
         return Ok(());
     };
     if file_hash(&source)? != sha {
         bail!("Source changed after assessment");
     }
-    let number = route(final_score as u8, &job.kind, &names[2]);
+    let number = route(final_score as u8, effective_kind, &names[2]);
     let folder_name = app
         .settings
         .folder_names
@@ -542,6 +660,7 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
     save_item(&app.db.lock().unwrap(), &job.id, item)?; // Persist intent before copying/publishing.
     item.copied = verified_copy(&source, &destination, item.source_sha.as_ref().unwrap())?;
     item.state = "done".into();
+    item.stage = Some("Output copy verified".into());
     Ok(())
 }
 fn notification_xml(title: &str, message: &str) -> String {
@@ -624,10 +743,11 @@ fn runner(app: Arc<App>) {
                     save_job(&app.db.lock().unwrap(), &job)?;
                     return Ok(());
                 }
-                if item.state == "done" || (item.state=="needs_review" && item.visual_review.is_none()) {
+                if item.state == "done" || (item.state=="needs_review" && item.visual_review.is_none() && !app.settings.tools.as_ref().is_some_and(evidence::automatic_configured)) {
                     continue;
                 }
                 item.state = "processing".into();
+                item.stage=Some("Collecting existing local evidence".into());
                 item.error = None;
                 save_item(&app.db.lock().unwrap(), &id, &item)?;
                 if let Err(error) = process_item(&app, &job, &mut item, scorer.as_mut()) {
@@ -677,7 +797,7 @@ fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
     let parts: Vec<_> = route.trim_matches('/').split('/').collect();
     if route == "/health" && method == Method::Get {
         return Ok(
-            json!({"ready":true,"processingReady":app.settings.tools.as_ref().is_some_and(|t|[&t.analysis_python,&t.ocr_python,&t.technical_script,&t.registration_script,&t.collector,&t.archive_database,&app.settings.raw_decoder].iter().all(|p|p.is_file())),"engine":"rust-aviation-rubric-14","automaticVisualReviewer":false,"scoreCalibration":"deferred","fullShootAcceptance":"deferred"}),
+            json!({"ready":true,"processingReady":app.settings.tools.as_ref().is_some_and(|t|[&t.analysis_python,&t.ocr_python,&t.technical_script,&t.registration_script,&t.collector,&t.archive_database,&app.settings.raw_decoder].iter().all(|p|p.is_file())),"engine":"rust-aviation-rubric-14","automaticVisualReviewer":app.settings.tools.as_ref().is_some_and(evidence::automatic_configured),"scoreCalibration":"deferred","fullShootAcceptance":"deferred"}),
         );
     }
     if route == "/settings" && method == Method::Get {
@@ -742,7 +862,7 @@ fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
                 bail!("Review request too large");
             }
             let submission: ReviewSubmission = serde_json::from_str(&body)?;
-            review::evaluate(&submission.review, job.kind == "aviation")?;
+
             let mut rows = items(&db, id)?;
             let item = rows
                 .iter_mut()
@@ -766,6 +886,8 @@ fn handle(app: &App, request: &mut tiny_http::Request) -> Result<Value> {
                     }
                 }
             }
+            let kind = item.effective_kind.as_deref().unwrap_or(&job.kind);
+            review::evaluate(&submission.review, kind == "aviation")?;
             item.visual_review = Some(submission.review);
             item.identification_review = submission.identification;
             item.state = "pending".into();
@@ -945,6 +1067,40 @@ mod tests {
             report["items"][0]["assessment"]["rubric"]["finalScore"],
             Value::Null
         );
+    }
+    #[test]
+    fn automatic_assessment_reaches_rubric_without_manual_scoring() {
+        // Contract fixture only: no photo, model inference, job, or score comparison.
+        let example = include_str!("../../examples/review-submission.json")
+            .replace("REPLACE:", "Synthetic contract:");
+        let example: Value = serde_json::from_str(&example).unwrap();
+        let mut automatic =
+            json!({"assessable":true,"effectiveKind":"aviation","review":example["review"]});
+        let (review, kind) = validated_automatic(&automatic).unwrap();
+        let result = review::evaluate(&review, kind == "aviation").unwrap();
+        assert_eq!(result["finalScore"], 91);
+        assert_eq!(route(91, &kind, "Unknown"), 4);
+        automatic["review"]["completeness"] = json!("cut-off");
+        let (review, kind) = validated_automatic(&automatic).unwrap();
+        assert_eq!(
+            review::evaluate(&review, kind == "aviation").unwrap()["finalScore"],
+            79
+        );
+        automatic["effectiveKind"] = json!("non-aviation");
+        automatic["review"]["completeness"] = json!("not-applicable");
+        let (review, kind) = validated_automatic(&automatic).unwrap();
+        assert_eq!(
+            route(
+                review::evaluate(&review, false).unwrap()["finalScore"]
+                    .as_u64()
+                    .unwrap() as u8,
+                &kind,
+                "Unknown"
+            ),
+            5
+        );
+        automatic["assessable"] = json!(false);
+        assert!(validated_automatic(&automatic).is_err());
     }
     #[test]
     fn routing_boundaries_and_labels() {

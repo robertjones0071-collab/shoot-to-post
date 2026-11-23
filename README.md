@@ -4,7 +4,7 @@ A local aviation photography dashboard, with a Windows Rust workflow for one-but
 
 **Workflow: Open the local dashboard → Select a shoot → Cull Through Review → Receive a local notification and summary.**
 
-Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluation using the existing rubric, evidence-backed identification, safe naming, verified output copies and a shoot summary. Original input files remain unchanged in the existing Windows folders. Photos, processing and summaries stay local. Website integration is deferred.
+The implementation supports JPEG and Canon CR3 RAW inputs, technical evaluation using the existing rubric, evidence-backed identification, safe naming, verified output copies and a shoot summary. Original input files remain unchanged in the existing Windows folders. Photos, processing and summaries stay local. Website integration is deferred.
 
 ## Current status
 
@@ -14,9 +14,9 @@ The Rust worker now calls the existing OpenCV and RapidOCR helpers, reads EXIF f
 
 Rubric 14 category arithmetic, dependencies, motion rules, technical ceilings and the whole-aircraft 79 cap are implemented in Rust. Final rubric grades control naming and routing. **HyperIQA is a separate diagnostic and no longer determines output names or folders.**
 
-**A complete automatic visual reviewer is still missing.** Existing measurements do not establish aircraft zones, motion intent, defect severity or six category grades. Such photos remain **Needs review / Unrated**, with no scored output copy. A named reviewer can provide a source-checksum-bound visual assessment through the report's review import; explicit Resume then applies it. This is an evidence-integrated workflow, not demonstrated autonomous review.
+**Automatic visual review is implemented using local Qwen3-VL-2B.** Start a shoot in Processing; the model inspects the overview and native detail crops, proposes six rubric categories and observations, and Rust validates the assessment before naming/routing verified copies. Automatic subject detection is the default. Manual scoring is not required in the normal path. Model failures or insufficient evidence remain Unrated rather than receiving invented grades. See [automatic reviewer setup and limits](docs/AUTOMATIC-REVIEWER.md).
 
-Fourteen Rust component tests and the synthetic existing-helper bridge check pass. Score comparisons and full-shoot end-to-end acceptance remain deferred at Robert's request. Actual notification delivery and the full batch lifecycle remain unverified. No installer is provided.
+Fifteen Rust component tests and three two-pass reviewer component tests pass. Score comparisons and full-shoot end-to-end acceptance remain deferred at Robert's request. The model's agreement with past grades, actual notification delivery and full batch behavior remain unverified. No installer is provided.
 
 See [local integration](docs/LOCAL-INTEGRATION.md), the [implementation plan](docs/PLAN.md), and the earlier [scoring proof](docs/SCORER-PROOF.md). Private dashboard data, downloaded runtimes and model weights are not included.
 
