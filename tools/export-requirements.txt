@@ -1,0 +1,6 @@
+# Additional one-time export/reference packages; requires an isolated PyTorch 2.8.0 / torchvision 0.23.0 environment.
+onnx==1.18.0
+onnxruntime==1.22.1
+protobuf==5.29.5
+ml_dtypes==0.5.1
+flatbuffers==25.2.10

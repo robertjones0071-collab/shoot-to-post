@@ -8,7 +8,9 @@ Version 1 is planned to support JPEG and Canon CR3 RAW inputs, technical evaluat
 
 ## Current status
 
-The existing local dashboard remains the interface for now. This repository contains planning documentation, not the private dashboard data or a working standalone review application. The complete implementation plan is awaiting review. No installer or validated autonomous reviewer is available yet.
+The existing local dashboard remains the interface for now. The first Rust scoring proof is implemented: a native Windows executable runs pretrained HyperIQA through ONNX Runtime, reads a JPEG/PNG, and emits a raw quality score without changing the source or archive ratings. One actual-photo reference comparison and a repeat run passed. See [build, run and measured results](docs/SCORER-PROOF.md).
+
+This is a scoring proof, not the complete cull-through-review application. CR3 decoding, batch orchestration, notifications and dashboard integration remain unfinished. No installer or validated autonomous aviation reviewer is available yet. Private dashboard data and model weights are not included.
 
 Read the [implementation plan](docs/PLAN.md) for scope, folder routing, architecture and acceptance gates.
 

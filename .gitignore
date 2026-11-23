@@ -1,4 +1,6 @@
 # Personal inputs and generated outputs
+/.local/
+/.cargo-local/
 *.cr3
 *.CR3
 *.raw

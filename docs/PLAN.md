@@ -1,6 +1,6 @@
 # Shoot to Post — Local dashboard and Windows processing plan
 
-Status: local dashboard retained at Robert's request. Website/cloud integration is deferred. JPEG plus Canon CR3 input and the public `shoot-to-post` GitHub repository remain confirmed for the planned one-button workflow. Application implementation has not started.
+Status: local dashboard retained at Robert's request. Website/cloud integration is deferred. JPEG plus Canon CR3 input and the public `shoot-to-post` GitHub repository remain confirmed for the planned one-button workflow. The one-photo Rust scoring proof is now implemented; the complete one-button workflow remains unfinished.
 
 ## The product
 
@@ -76,7 +76,7 @@ The photography website is managed through ChatGPT Sites; integration can be rev
 
 ### 1. Agree on this plan
 
-The local dashboard, existing Windows folders, JPEG plus CR3, public visibility and repository name are confirmed. Website integration is deferred. Robert still reviews the complete implementation plan before application coding. Record any scope changes here first.
+The local dashboard, existing Windows folders, JPEG plus CR3, public visibility and repository name are confirmed. Website integration is deferred. Robert authorized the first build: a one-photo HyperIQA scorer in Rust with a reference comparison. That proof is implemented. Record scope changes before expanding beyond the agreed local workflow.
 
 ### 2. Establish review quality before a large application build
 
@@ -108,7 +108,7 @@ Include application source, the agreed plan and rubric, synthetic fixtures, depe
 
 Keep photos, real shoot manifests, the current archive database, path-containing inventory/journal files, generated dashboard snapshots containing collection data, caches, downloaded models/runtimes, credentials and local configuration out of Git. The private prototype embeds real collection data, so extract a clean template rather than blindly committing it. Document model downloads with versions/checksums and redistribution constraints. Preserve licenses for reused open-source components. Public distribution and a project license need an explicit choice before release.
 
-Repository creation and a documentation-only first push are authorized by Robert's confirmation of the name and public visibility. Application implementation remains pending review of the full plan. Verify actual remote creation and pushed contents before reporting publication.
+Repository creation and a documentation-only first push are authorized by Robert's confirmation of the name and public visibility. The first scoring proof was subsequently authorized and implemented. Verify pushed contents before reporting publication.
 
 ## Excluded from this scope
 

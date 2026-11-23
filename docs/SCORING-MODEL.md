@@ -10,7 +10,7 @@ Robert's direction: the existing workflow is the foundation; reuse an open-sourc
 - The official demo resizes to 512 by 384, evaluates ten random 224-pixel crops with ImageNet normalization, and averages their scores: https://github.com/SSL92/hyperIQA/blob/master/demo.py
 - Proposed Rust runtime: `ort`, the MIT/Apache-2.0 Rust interface to ONNX Runtime: https://github.com/pykeio/ort
 
-This is a candidate selection, not a claim of a completed export, working Rust scorer, measured Windows speed or validated aviation accuracy. Check the checkpoint's terms/provenance separately before redistributing weights; the repository's source license alone is not a verified license for every separately hosted artifact. Keep downloaded weights outside Git and record exact origin, version and checksum.
+The first export and native Windows Rust scoring proof now work. One actual JPEG comparison passed against the original network, and a repeat returned the same result. See [the measured proof and its limits](SCORER-PROOF.md). Aviation accuracy and agreement with the historical rubric are not established. Check the checkpoint's terms/provenance separately before redistributing weights; the repository's source license alone is not a verified license for every separately hosted artifact. Keep downloaded weights outside Git and record exact origin, version and checksum.
 
 ## First build boundary
 
@@ -33,4 +33,4 @@ Do not assume that the current PyIQA distribution is permissively licensed: its 
 
 ## Scope
 
-No custom training, cloud integration, dashboard redesign, archive-wide rescoring, model download or application implementation was performed by this research/documentation change.
+Implemented scope: the one-photo Rust scoring proof, one-time model export and reference comparison. No custom training, cloud integration, dashboard redesign or archive-wide rescoring. Model downloads and private validation data stay local and ignored by Git.
