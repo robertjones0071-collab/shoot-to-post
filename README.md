@@ -16,7 +16,7 @@ Rubric 14 category arithmetic, dependencies, motion rules, technical ceilings an
 
 **Automatic visual review is implemented using local Qwen3-VL-2B.** Start a shoot in Processing; the model inspects the overview and native detail crops, proposes six rubric categories and observations, and Rust validates the assessment before naming/routing verified copies. Automatic subject detection is the default. Manual scoring is not required in the normal path. Model failures or insufficient evidence remain Unrated rather than receiving invented grades. See [automatic reviewer setup and limits](docs/AUTOMATIC-REVIEWER.md).
 
-Fifteen Rust component tests and three two-pass reviewer component tests pass. Score comparisons and full-shoot end-to-end acceptance remain deferred at Robert's request. The model's agreement with past grades, actual notification delivery and full batch behavior remain unverified. No installer is provided.
+Fifteen Rust component tests and ten reviewer component tests pass. The optimized local vision call measured about 8x faster on a generated-image test; see [performance results and limits](docs/REVIEWER-PERFORMANCE.md). This is not a full-photo throughput estimate. Score comparisons and full-shoot end-to-end acceptance remain deferred at Robert's request. The model's agreement with past grades, actual notification delivery and full batch behavior remain unverified. No installer is provided.
 
 See [local integration](docs/LOCAL-INTEGRATION.md), the [implementation plan](docs/PLAN.md), and the earlier [scoring proof](docs/SCORER-PROOF.md). Private dashboard data, downloaded runtimes and model weights are not included.
 
