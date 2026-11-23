@@ -18,7 +18,7 @@ Read the [implementation plan](docs/PLAN.md) for scope, folder routing, architec
 - Add a local Rust job engine after the implementation plan is reviewed.
 - Keep dashboard-to-worker communication on the PC.
 - Reuse working image-analysis helpers where appropriate.
-- Validate a free local visual reviewer before committing to a large application build.
+- Reuse a pretrained scoring model for v1 and run it from Rust; HyperIQA is the first candidate. See [model research](docs/SCORING-MODEL.md). Custom training is deferred.
 - Preserve scoring evidence, model/rubric versions and original files.
 - Resume interrupted jobs and report failures honestly.
 

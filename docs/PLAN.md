@@ -47,6 +47,8 @@ Reuse the accepted dashboard's colors, typography, light/dark modes and archive 
 
 ## Architecture and reuse
 
+V1 scoring direction: reuse a pretrained open-source technical image-quality model and run inference from Rust. Custom model training is deferred. HyperIQA is the first candidate; see [scoring model research and first build boundary](SCORING-MODEL.md). Export compatibility, checkpoint provenance and agreement with the existing aviation scores remain to be checked.
+
 | Piece | Plan |
 | --- | --- |
 | Local interface | Existing dashboard on the Windows PC; retain accepted archive screens and palette |
