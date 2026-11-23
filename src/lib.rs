@@ -1,3 +1,4 @@
+pub mod compact;
 pub mod evidence;
 pub mod review;
 use anyhow::{bail, Context, Result};

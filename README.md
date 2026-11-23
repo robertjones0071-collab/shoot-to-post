@@ -8,6 +8,8 @@ The implementation supports JPEG and Canon CR3 RAW inputs, technical evaluation 
 
 ## Current status
 
+**The reviewer has not passed acceptance.** The same-photo compact candidate took 89.9 seconds and returned Unrated against a 30-second successful-review target. It has not replaced the dashboard default. See [measured result and implemented steps](docs/THIRTY-SECOND-TARGET.md).
+
 The existing local dashboard now connects to a native Rust job worker in its Processing tab. Select a shoot folder, choose its content type, and start. The worker supports JPEG and Canon CR3 inputs, persists progress in a separate SQLite database, provides cancellation and resume, and produces checksum-verified output copies without changing originals. Results and a downloadable JSON report appear in the dashboard; the completion handler submits a Windows notification linking back to Processing.
 
 The Rust worker now calls the existing OpenCV and RapidOCR helpers, reads EXIF from decoded inputs, and reuses exact-byte archive identity metadata through a read-only connection. OCR output stays unconfirmed; conflicting identity labels remain Unknown. Historical grades are never read for a new grade or overwritten.

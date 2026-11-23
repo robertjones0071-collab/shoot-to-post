@@ -3,6 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use shoot_to_post_scorer::{
+    compact, digest,
     evidence::{self, Tools},
     file_hash,
     review::{self, VisualReview},
@@ -79,6 +80,8 @@ struct Item {
     effective_kind: Option<String>,
     #[serde(default)]
     stage: Option<String>,
+    #[serde(default)]
+    timings: BTreeMap<String, f64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -333,6 +336,7 @@ fn create_job(app: &App, request: NewJob) -> Result<Value> {
                     automatic_review: None,
                     effective_kind: None,
                     stage: None,
+                    timings: BTreeMap::new(),
                 },
             )?;
         }
@@ -417,6 +421,9 @@ fn validated_automatic(automatic: &Value) -> Result<(VisualReview, String)> {
     if automatic["assessable"].as_bool() != Some(true) {
         bail!("Automatic model did not establish an assessable image");
     }
+    if automatic.get("compactObservation").is_some() {
+        return compact::to_review(automatic);
+    }
     let kind = automatic["effectiveKind"]
         .as_str()
         .context("Missing detected subject type")?
@@ -428,7 +435,109 @@ fn validated_automatic(automatic: &Value) -> Result<(VisualReview, String)> {
     review::evaluate(&review, kind == "aviation")?;
     Ok((review, kind))
 }
+fn assessment_cache_key(app: &App, sha: &str) -> Result<(PathBuf, String)> {
+    let tools = app.settings.tools.as_ref().context("No tools configured")?;
+    let manifest = tools
+        .vision_manifest
+        .as_ref()
+        .context("No model manifest")?;
+    let root = manifest.parent().context("Missing model directory")?;
+    let mut fingerprint = sha.to_owned();
+    for path in [
+        manifest,
+        tools.visual_reviewer.as_ref().context("No reviewer")?,
+        &tools.collector,
+        &tools.technical_script,
+        &tools.registration_script,
+    ] {
+        fingerprint.push_str(&file_hash(path)?);
+    }
+    let analysis = tools
+        .visual_reviewer
+        .as_ref()
+        .unwrap()
+        .parent()
+        .context("No analysis directory")?;
+    for name in [
+        "visual_reviewer.py",
+        "fast-vision-schema.json",
+        "fast-vision-prompt.txt",
+    ] {
+        fingerprint.push_str(&file_hash(&analysis.join(name))?);
+    }
+    fingerprint.push_str(include_str!("../compact.rs"));
+    fingerprint.push_str(include_str!("../review.rs"));
+    let key = digest(fingerprint.as_bytes());
+    Ok((
+        root.join("accepted-assessments")
+            .join(format!("{key}.json")),
+        key,
+    ))
+}
+fn accepted_cache(path: &Path, key: &str, sha: &str) -> Option<Value> {
+    if fs::metadata(path).ok()?.len() > 8 * 1024 * 1024 {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    if value["key"].as_str() != Some(key)
+        || value["sourceSha256"].as_str() != Some(sha)
+        || value["automatic"]["accepted"].as_bool() != Some(true)
+        || value["evidence"]["sourceSha256"].as_str() != Some(sha)
+    {
+        return None;
+    }
+    validated_automatic(&value["automatic"]).ok()?;
+    Some(value)
+}
+fn save_accepted_cache(path: &Path, value: &Value) -> Result<()> {
+    let parent = path.parent().context("Cache parent missing")?;
+    fs::create_dir_all(parent)?;
+    let mut file = tempfile::NamedTempFile::new_in(parent)?;
+    use std::io::Write;
+    file.write_all(&serde_json::to_vec(value)?)?;
+    file.as_file_mut().sync_all()?;
+    if !path.exists() {
+        file.persist_noclobber(path)
+            .map_err(|e| anyhow::anyhow!("Cache publish: {}", e.error))?;
+    }
+    Ok(())
+}
+fn reusable_evidence(db: &Connection, sha: &str, tools: &Tools) -> Option<Value> {
+    let native = file_hash(&tools.technical_script).ok()?;
+    let ocr = file_hash(&tools.registration_script).ok()?;
+    let mut q = db
+        .prepare("SELECT data FROM items WHERE json_extract(data,'$.sourceSha')=? LIMIT 20")
+        .ok()?;
+    let rows = q.query_map([sha], |r| r.get::<_, String>(0)).ok()?;
+    for raw in rows.flatten() {
+        let Ok(item) = serde_json::from_str::<Item>(&raw) else {
+            continue;
+        };
+        let Some(mut e) = item.evidence else {
+            continue;
+        };
+        if e["sourceSha256"].as_str() != Some(sha)
+            || e["registrationOcr"]["helperSha256"].as_str() != Some(ocr.as_str())
+        {
+            continue;
+        }
+        let Some(tiles) = e["technical"]["tiles"].as_array() else {
+            continue;
+        };
+        if tiles.is_empty() {
+            continue;
+        }
+        // The collector stores the helper fingerprint on the technical envelope.
+        if e["technical"]["helperSha256"].as_str() != Some(native.as_str()) {
+            continue;
+        }
+        e["reusedSourceHashEvidence"] = json!(true);
+        return Some(e);
+    }
+    None
+}
 fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Scorer>) -> Result<()> {
+    let item_started = std::time::Instant::now();
     let source = approved(&item.source, &app.settings)?;
     // A recorded output plan is a recovery checkpoint, not permission to replace any file.
     if let (Some(destination), Some(expected)) = (&item.output, &item.source_sha) {
@@ -462,6 +571,29 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
         bail!("Source changed since evidence/review was recorded");
     }
     item.source_sha = Some(sha.clone());
+    let cache = assessment_cache_key(app, &sha).ok();
+    if item.visual_review.is_none() {
+        if let Some((path, key)) = &cache {
+            if let Some(saved) = accepted_cache(path, key, &sha) {
+                let (mut automatic, evidence) =
+                    (saved["automatic"].clone(), saved["evidence"].clone());
+                let (review, kind) = validated_automatic(&automatic)?;
+                automatic["assessmentCacheHit"] = json!(true);
+                automatic["originalElapsedSeconds"] = automatic["elapsedSeconds"].clone();
+                automatic["elapsedSeconds"] = json!(0);
+                item.visual_review = Some(review);
+                item.effective_kind = Some(kind);
+                item.evidence = Some(evidence);
+                item.automatic_review = Some(automatic);
+            }
+        }
+    }
+    let evidence_started = std::time::Instant::now();
+    if item.evidence.is_none() {
+        if let Some(tools) = &app.settings.tools {
+            item.evidence = reusable_evidence(&app.db.lock().unwrap(), &sha, tools);
+        }
+    }
     if item.evidence.is_none() {
         let tools = app
             .settings
@@ -474,6 +606,10 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
             &app.settings.raw_decoder,
         )?);
     }
+    item.timings.insert(
+        "evidenceSeconds".into(),
+        evidence_started.elapsed().as_secs_f64(),
+    );
     if item.visual_review.is_none() {
         if let Some(tools) = app
             .settings
@@ -483,7 +619,8 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
         {
             item.stage = Some("Automatic visual review on local CPU".into());
             save_item(&app.db.lock().unwrap(), &job.id, item)?;
-            let mut correction = None;
+            let mut correction: Option<Value> = None;
+            let visual_started = std::time::Instant::now();
             for attempt in 0..2 {
                 let mut automatic = evidence::automatic_review(
                     tools,
@@ -492,9 +629,12 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
                     item.evidence
                         .as_ref()
                         .context("Missing collected evidence")?,
-                    correction.as_deref(),
+                    correction.as_ref(),
                 )?;
                 automatic["attempt"] = json!(attempt + 1);
+                if let Some(previous) = &item.automatic_review {
+                    automatic["previousAttemptError"] = previous["validationError"].clone();
+                }
                 if automatic["assessable"].as_bool() != Some(true) {
                     item.automatic_review = Some(automatic);
                     break;
@@ -503,6 +643,7 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
                 match validated {
                     Ok((review, kind)) => {
                         automatic["accepted"] = json!(true);
+                        automatic["review"] = serde_json::to_value(&review)?;
                         item.visual_review = Some(review);
                         item.effective_kind = Some(kind);
                         item.automatic_review = Some(automatic);
@@ -513,11 +654,48 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
                         automatic["accepted"] = json!(false);
                         automatic["validationError"] = json!(message);
                         item.automatic_review = Some(automatic);
-                        correction = Some(message);
+                        let field = if message.starts_with("c:") {
+                            Some("c")
+                        } else if message.starts_with("m:") || message.contains("Successful PAN") {
+                            Some("m")
+                        } else {
+                            None
+                        };
+                        if item
+                            .automatic_review
+                            .as_ref()
+                            .is_some_and(|a| a.get("compactObservation").is_some())
+                        {
+                            let Some(field) = field else {
+                                break;
+                            };
+                            correction = Some(
+                                json!({"repairField":field,"previousObservation":item.automatic_review.as_ref().unwrap()["compactObservation"],"correction":message}),
+                            );
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
+            item.timings.insert(
+                "visualReviewSeconds".into(),
+                visual_started.elapsed().as_secs_f64(),
+            );
             save_item(&app.db.lock().unwrap(), &job.id, item)?;
+        }
+    }
+    if item.visual_review.is_some()
+        && item
+            .automatic_review
+            .as_ref()
+            .is_some_and(|a| a["accepted"].as_bool() == Some(true))
+    {
+        if let Some((path, key)) = &cache {
+            let _ = save_accepted_cache(
+                path,
+                &json!({"key":key,"sourceSha256":sha,"automatic":item.automatic_review,"evidence":item.evidence}),
+            );
         }
     }
     let effective_kind = item.effective_kind.as_deref().unwrap_or(&job.kind);
@@ -602,6 +780,12 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
         .and_then(|a| a.get("modelDiagnostic"))
     {
         previous.clone()
+    } else if item
+        .automatic_review
+        .as_ref()
+        .is_some_and(|a| a.get("compactObservation").is_some())
+    {
+        json!({"status":"skipped","reason":"Optional general-IQA diagnostic does not determine rubric grades"})
     } else if let Some(scorer) = scorer {
         match scorer.score(&source, Some(&app.settings.raw_decoder), None) {
             Ok(v) => v,
@@ -622,6 +806,10 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
         item.score = None;
         item.state = "needs_review".into();
         item.stage = Some("Unrated: automatic evidence insufficient".into());
+        item.timings.insert(
+            "totalItemSeconds".into(),
+            item_started.elapsed().as_secs_f64(),
+        );
         return Ok(());
     };
     if file_hash(&source)? != sha {
@@ -658,7 +846,16 @@ fn process_item(app: &App, job: &Job, item: &mut Item, scorer: Option<&mut Score
     item.score = Some(final_score as f64);
     item.output = Some(destination.clone());
     save_item(&app.db.lock().unwrap(), &job.id, item)?; // Persist intent before copying/publishing.
+    let copy_started = std::time::Instant::now();
     item.copied = verified_copy(&source, &destination, item.source_sha.as_ref().unwrap())?;
+    item.timings.insert(
+        "verifiedCopySeconds".into(),
+        copy_started.elapsed().as_secs_f64(),
+    );
+    item.timings.insert(
+        "totalItemSeconds".into(),
+        item_started.elapsed().as_secs_f64(),
+    );
     item.state = "done".into();
     item.stage = Some("Output copy verified".into());
     Ok(())
@@ -729,7 +926,7 @@ fn runner(app: Arc<App>) {
         };
         let id = job.id.clone();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
-            if scorer.is_none() {
+            if scorer.is_none() && !app.settings.tools.as_ref().and_then(|t|t.visual_reviewer.as_ref()).is_some_and(|p|p.file_name().is_some_and(|n|n=="fast_visual_reviewer.py")) {
                 scorer = Scorer::new(
                     &app.settings.model,
                     &app.settings.model_sha256,
@@ -932,7 +1129,7 @@ fn open_store(path: &Path) -> Result<Connection> {
     fs::create_dir_all(path.parent().context("Missing job database parent")?)?;
     let db = Connection::open(path)?;
     db.busy_timeout(Duration::from_secs(5))?;
-    db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,state TEXT NOT NULL,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS items(job_id TEXT NOT NULL,ordinal INTEGER NOT NULL,state TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(job_id,ordinal));")?;
+    db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,state TEXT NOT NULL,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS items(job_id TEXT NOT NULL,ordinal INTEGER NOT NULL,state TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(job_id,ordinal));CREATE INDEX IF NOT EXISTS items_source_sha ON items(json_extract(data,'$.sourceSha'));")?;
     let old: Vec<String> = {
         let mut q =
             db.prepare("SELECT data FROM jobs WHERE state IN ('running','cancel_requested')")?;
@@ -1101,6 +1298,20 @@ mod tests {
         );
         automatic["assessable"] = json!(false);
         assert!(validated_automatic(&automatic).is_err());
+    }
+    #[test]
+    fn accepted_cache_refuses_failed_or_mismatched_assessments() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.json");
+        let mut automatic = json!({"assessable":true,"accepted":true,"modelId":"synthetic cache fixture","reviewedAt":"2026-11-22T00:00:00Z","viewContext":{"nativeCrops":[{}]},"compactObservation":{"k":1,"c":1,"m":1,"z":[4,4,4,4,4],"q":[6,6,6,5,5,5],"d":[]}});
+        let value = json!({"key":"versioned-key","sourceSha256":"exact-bytes","automatic":automatic,"evidence":{"sourceSha256":"exact-bytes"}});
+        save_accepted_cache(&path, &value).unwrap();
+        assert!(accepted_cache(&path, "versioned-key", "exact-bytes").is_some());
+        assert!(accepted_cache(&path, "changed-policy", "exact-bytes").is_none());
+        assert!(accepted_cache(&path, "versioned-key", "changed-bytes").is_none());
+        automatic["accepted"] = json!(false);
+        fs::write(&path,serde_json::to_vec(&json!({"key":"versioned-key","sourceSha256":"exact-bytes","automatic":automatic,"evidence":{"sourceSha256":"exact-bytes"}})).unwrap()).unwrap();
+        assert!(accepted_cache(&path, "versioned-key", "exact-bytes").is_none());
     }
     #[test]
     fn routing_boundaries_and_labels() {

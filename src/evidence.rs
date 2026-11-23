@@ -138,7 +138,7 @@ pub fn automatic_review(
     source: &Path,
     decoder: &Path,
     evidence: &Value,
-    correction: Option<&str>,
+    correction: Option<&Value>,
 ) -> Result<Value> {
     let sha = file_hash(source)?;
     let script = tools
@@ -159,11 +159,19 @@ pub fn automatic_review(
     };
     let input = rendering.as_ref().map_or(source, |f| f.path());
     let input_sha = file_hash(input)?;
+    let mut request = json!({"source":input,"manifest":manifest,"ocrLines":evidence["registrationOcr"]["lines"],"measurements":evidence["technical"]});
+    if let Some(correction) = correction {
+        if let Some(object) = correction.as_object() {
+            for (key, value) in object {
+                request[key] = value.clone();
+            }
+        }
+    }
     let mut result = helper_deadline(
         &tools.analysis_python,
         script,
-        json!({"source":input,"manifest":manifest,"ocrLines":evidence["registrationOcr"]["lines"],"correction":correction}),
-        Duration::from_secs(1800),
+        request,
+        Duration::from_secs(150),
     )?;
     if result["inputSha256"].as_str() != Some(input_sha.as_str()) || file_hash(source)? != sha {
         bail!("Photo changed during automatic visual review");
